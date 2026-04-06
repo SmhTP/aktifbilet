@@ -2,10 +2,9 @@
 
 import { useState, useMemo, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { Search, Filter, SlidersHorizontal, Loader2 } from "lucide-react"
+import { Search, SlidersHorizontal, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -69,7 +68,6 @@ function ActivitiesContent() {
         const formattedData = data.map((item) => ({
           id: item.id,
           slug: item.slug,
-          // Verileri Zırhlı fonksiyondan geçiriyoruz
           name: safeJson(item.name),
           description: safeJson(item.description),
           minPrice: item.price || 0,
@@ -102,7 +100,6 @@ function ActivitiesContent() {
 
     if (searchQuery) {
       result = result.filter((activity) => {
-        // Arama kısmını da çökmelere karşı korumalı hale getirdik
         const nameText = activity.name?.[currentLocale] || ""
         const descText = activity.description?.[currentLocale] || ""
         return (
@@ -146,16 +143,16 @@ function ActivitiesContent() {
     setPriceRange([0, 5000])
   }
 
-  const getCategoryName = (category: typeof categories[0]) => {
+  const getCategoryName = (category: any) => {
     const key = categoryTranslationKeys[category.slug]
-    // i18n hatasına karşı koruma eklendi
     if (key) {
       const translated = t(key)
       if (translated) return translated
     }
-    return category.name?.[currentLocale] || category.name?.tr || "Kategori"
+    return typeof category.name === 'string' ? category.name : "Kategori"
   }
 
+  // EKSİK OLAN RETURN KISMI BURASIYDI, EKLENDİ!
   return (
     <div className="min-h-screen bg-background">
       <div className="bg-primary/5 border-b border-border">
