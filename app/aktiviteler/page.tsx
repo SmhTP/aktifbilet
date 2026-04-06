@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { Search, Filter, SlidersHorizontal } from "lucide-react"
+import { Search, Filter, SlidersHorizontal, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -13,17 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
 import { Slider } from "@/components/ui/slider"
 import { ActivityCard } from "@/components/activity-card"
-import { activities, categories } from "@/lib/data"
+import { categories } from "@/lib/data"
 import { useI18n } from "@/lib/i18n"
+import { supabase } from "@/lib/supabase" // Supabase bağlantımızı ekledik
 
 const categoryTranslationKeys: Record<string, string> = {
   "doga-sporlari": "category.natureSports",
@@ -33,18 +27,58 @@ const categoryTranslationKeys: Record<string, string> = {
   "kultur-sanat": "category.culturalArt",
 }
 
-// useSearchParams kullanımı için Suspense sarmalayıcısı gereklidir
 function ActivitiesContent() {
   const { t, locale } = useI18n()
   const searchParams = useSearchParams()
   const currentLocale = locale as "tr" | "en"
   
+  // Veritabanından gelecek veriler için state'ler
+  const [dbActivities, setDbActivities] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("popular")
-  const [priceRange, setPriceRange] = useState<number[]>([0, 1000])
+  const [priceRange, setPriceRange] = useState<number[]>([0, 5000]) // Max fiyatı 5000 yaptık
 
-  // URL'den gelen ?kategori=slug parametresini yakalayıp filtreyi güncelliyoruz
+  // Supabase'den Verileri Çekme İşlemi
+  useEffect(() => {
+    async function fetchActivities() {
+      const { data, error } = await supabase
+        .from("activities")
+        .select(`
+          *,
+          providers (
+            rating,
+            review_count
+          )
+        `)
+
+      if (data) {
+        // Gelen veriyi ActivityCard'ın beklediği formata dönüştürüyoruz
+        const formattedData = data.map((item) => ({
+          id: item.id,
+          slug: item.slug,
+          name: item.name,
+          description: item.description,
+          minPrice: item.price,
+          image: item.image,
+          location: item.location,
+          duration: item.duration,
+          categorySlug: item.category,
+          rating: item.providers?.rating || 0,
+          reviewCount: item.providers?.review_count || 0,
+        }))
+        setDbActivities(formattedData)
+      } else if (error) {
+        console.error("Veri çekme hatası:", error)
+      }
+      setIsLoading(false)
+    }
+
+    fetchActivities()
+  }, [])
+
   useEffect(() => {
     const categoryFromUrl = searchParams.get("kategori")
     if (categoryFromUrl) {
@@ -53,7 +87,8 @@ function ActivitiesContent() {
   }, [searchParams])
 
   const filteredActivities = useMemo(() => {
-    let result = activities
+    // Artık statik "activities" yerine veritabanından gelen "dbActivities" kullanıyoruz
+    let result = dbActivities
 
     if (searchQuery) {
       result = result.filter(
@@ -71,7 +106,6 @@ function ActivitiesContent() {
       (activity) => activity.minPrice >= priceRange[0] && activity.minPrice <= priceRange[1]
     )
 
-    // Sıralama Mantığı
     switch (sortBy) {
       case "price-asc":
         result = [...result].sort((a, b) => a.minPrice - b.minPrice)
@@ -89,13 +123,13 @@ function ActivitiesContent() {
     }
 
     return result
-  }, [searchQuery, selectedCategory, sortBy, priceRange, currentLocale])
+  }, [searchQuery, selectedCategory, sortBy, priceRange, currentLocale, dbActivities])
 
   const clearFilters = () => {
     setSearchQuery("")
     setSelectedCategory("all")
     setSortBy("popular")
-    setPriceRange([0, 1000])
+    setPriceRange([0, 5000])
   }
 
   const getCategoryName = (category: typeof categories[0]) => {
@@ -151,8 +185,8 @@ function ActivitiesContent() {
                   <Slider
                     value={priceRange}
                     onValueChange={setPriceRange}
-                    max={1000}
-                    step={50}
+                    max={5000}
+                    step={100}
                     className="mb-4"
                   />
                   <div className="flex justify-between text-sm text-muted-foreground">
@@ -197,15 +231,31 @@ function ActivitiesContent() {
               </div>
             </div>
 
-            <p className="text-sm text-muted-foreground mb-6">
-              {filteredActivities.length} {t("activities.found")}
-            </p>
+            {/* Yükleme Ekranı */}
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+                <p className="text-muted-foreground">Aktiviteler yükleniyor...</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground mb-6">
+                  {filteredActivities.length} {t("activities.found")}
+                </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredActivities.map((activity) => (
-                <ActivityCard key={activity.id} activity={activity} />
-              ))}
-            </div>
+                {filteredActivities.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {filteredActivities.map((activity) => (
+                      <ActivityCard key={activity.id} activity={activity} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-20 bg-secondary/20 rounded-lg">
+                    <p className="text-muted-foreground">Aradığınız kriterlere uygun aktivite bulunamadı.</p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -213,10 +263,13 @@ function ActivitiesContent() {
   )
 }
 
-// Ana sayfa bileşeni
 export default function ActivitiesPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
       <ActivitiesContent />
     </Suspense>
   )
