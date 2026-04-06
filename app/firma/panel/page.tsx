@@ -1,5 +1,5 @@
 "use client"
-
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { 
@@ -106,9 +106,11 @@ export default function ProviderDashboard() {
             <h2 className="text-3xl font-bold text-foreground">Hoş Geldin, {provider?.name}</h2>
             <p className="text-muted-foreground">İşletmenizin bugünkü durumuna göz atın.</p>
           </div>
-          <Button size="lg" className="shadow-lg">
-            <Plus className="mr-2 h-5 w-5" /> Yeni Aktivite Ekle
-          </Button>
+          <Button size="lg" className="shadow-lg" asChild>
+  <Link href="/firma/panel/yeni">
+    <Plus className="mr-2 h-5 w-5" /> Yeni Aktivite Ekle
+  </Link>
+</Button>
         </div>
 
         {/* İstatistik Kartları */}
