@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowRight, Search, Mountain, Waves, Compass, Palette, Landmark, TrendingUp, Shield, Clock } from "lucide-react"
+import { ArrowRight, Search, Mountain, Waves, Compass, Palette, Landmark, TrendingUp, Shield, Clock, User, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ActivityCard } from "@/components/activity-card"
@@ -56,13 +56,13 @@ export default function HomePage() {
           
           {/* Search Box */}
           <div className="mt-10 max-w-2xl mx-auto">
-            <div className="flex flex-col sm:flex-row gap-3 bg-card p-3 rounded-2xl shadow-xl">
+            <div className="flex flex-col sm:flex-row gap-3 bg-card/90 backdrop-blur-sm p-3 rounded-2xl shadow-xl">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input
                   type="text"
                   placeholder={t("hero.searchPlaceholder")}
-                  className="pl-10 h-12 border-0 bg-secondary text-foreground placeholder:text-muted-foreground"
+                  className="pl-10 h-12 border-0 bg-secondary/50 text-foreground placeholder:text-muted-foreground"
                 />
               </div>
               <Button size="lg" className="h-12 px-8 bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -70,6 +70,24 @@ export default function HomePage() {
               </Button>
             </div>
           </div>
+
+          {/* YENİ EKLENEN GİRİŞ BUTONLARI BURADA BAŞLIYOR */}
+          <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4 max-w-2xl mx-auto">
+            <Link href="/kullanici/giris" className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full h-12 bg-background/20 hover:bg-background/40 border-white/30 text-white backdrop-blur-sm transition-all">
+                <User className="mr-2 h-4 w-4" />
+                Kullanıcı Girişi
+              </Button>
+            </Link>
+            
+            <Link href="/firma/giris" className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full h-12 bg-background/20 hover:bg-background/40 border-white/30 text-white backdrop-blur-sm transition-all">
+                <Building2 className="mr-2 h-4 w-4" />
+                Firma Girişi
+              </Button>
+            </Link>
+          </div>
+          {/* YENİ EKLENEN GİRİŞ BUTONLARI BURADA BİTİYOR */}
 
           {/* Quick Stats */}
           <div className="mt-12 flex flex-wrap justify-center gap-8">
