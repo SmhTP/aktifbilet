@@ -17,7 +17,7 @@ import { Slider } from "@/components/ui/slider"
 import { ActivityCard } from "@/components/activity-card"
 import { categories } from "@/lib/data"
 import { useI18n } from "@/lib/i18n"
-import { supabase } from "@/lib/supabase" // Supabase bağlantımızı ekledik
+import { supabase } from "@/lib/supabase"
 
 const categoryTranslationKeys: Record<string, string> = {
   "doga-sporlari": "category.natureSports",
@@ -27,21 +27,32 @@ const categoryTranslationKeys: Record<string, string> = {
   "kultur-sanat": "category.culturalArt",
 }
 
+// Gelen veriyi her koşulda güvenli bir çoklu dil objesine çeviren Zırhlı Fonksiyon
+const safeJson = (val: any) => {
+  if (!val) return { tr: "", en: "" }
+  if (typeof val === "string") {
+    try {
+      return JSON.parse(val)
+    } catch (e) {
+      return { tr: val, en: val }
+    }
+  }
+  return val
+}
+
 function ActivitiesContent() {
   const { t, locale } = useI18n()
   const searchParams = useSearchParams()
   const currentLocale = locale as "tr" | "en"
   
-  // Veritabanından gelecek veriler için state'ler
   const [dbActivities, setDbActivities] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("popular")
-  const [priceRange, setPriceRange] = useState<number[]>([0, 5000]) // Max fiyatı 5000 yaptık
+  const [priceRange, setPriceRange] = useState<number[]>([0, 5000])
 
-  // Supabase'den Verileri Çekme İşlemi
   useEffect(() => {
     async function fetchActivities() {
       const { data, error } = await supabase
@@ -55,17 +66,17 @@ function ActivitiesContent() {
         `)
 
       if (data) {
-        // Gelen veriyi ActivityCard'ın beklediği formata dönüştürüyoruz
         const formattedData = data.map((item) => ({
           id: item.id,
           slug: item.slug,
-          name: item.name,
-          description: item.description,
-          minPrice: item.price,
-          image: item.image,
-          location: item.location,
-          duration: item.duration,
-          categorySlug: item.category,
+          // Verileri Zırhlı fonksiyondan geçiriyoruz
+          name: safeJson(item.name),
+          description: safeJson(item.description),
+          minPrice: item.price || 0,
+          image: item.image || "/placeholder.jpg",
+          location: safeJson(item.location),
+          duration: item.duration || "",
+          categorySlug: item.category || "all",
           rating: item.providers?.rating || 0,
           reviewCount: item.providers?.review_count || 0,
         }))
@@ -87,15 +98,18 @@ function ActivitiesContent() {
   }, [searchParams])
 
   const filteredActivities = useMemo(() => {
-    // Artık statik "activities" yerine veritabanından gelen "dbActivities" kullanıyoruz
     let result = dbActivities
 
     if (searchQuery) {
-      result = result.filter(
-        (activity) =>
-          activity.name[currentLocale].toLowerCase().includes(searchQuery.toLowerCase()) ||
-          activity.description[currentLocale].toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      result = result.filter((activity) => {
+        // Arama kısmını da çökmelere karşı korumalı hale getirdik
+        const nameText = activity.name?.[currentLocale] || ""
+        const descText = activity.description?.[currentLocale] || ""
+        return (
+          nameText.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          descText.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      })
     }
 
     if (selectedCategory !== "all") {
@@ -133,15 +147,21 @@ function ActivitiesContent() {
   }
 
   const getCategoryName = (category: typeof categories[0]) => {
-    return t(categoryTranslationKeys[category.slug]) || category.name
+    const key = categoryTranslationKeys[category.slug]
+    // i18n hatasına karşı koruma eklendi
+    if (key) {
+      const translated = t(key)
+      if (translated) return translated
+    }
+    return category.name?.[currentLocale] || category.name?.tr || "Kategori"
   }
 
   return (
     <div className="min-h-screen bg-background">
       <div className="bg-primary/5 border-b border-border">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-          <h1 className="text-3xl font-bold text-foreground">{t("activities.header")}</h1>
-          <p className="mt-2 text-muted-foreground">{t("activities.headerDesc")}</p>
+          <h1 className="text-3xl font-bold text-foreground">{t("activities.header") || "Aktiviteler"}</h1>
+          <p className="mt-2 text-muted-foreground">{t("activities.headerDesc") || "Tüm aktiviteleri keşfedin"}</p>
         </div>
       </div>
 
@@ -151,7 +171,7 @@ function ActivitiesContent() {
           <aside className="hidden lg:block w-64 shrink-0">
             <div className="sticky top-24 space-y-6">
               <div>
-                <h3 className="font-semibold text-foreground mb-3">{t("section.categories")}</h3>
+                <h3 className="font-semibold text-foreground mb-3">{t("section.categories") || "Kategoriler"}</h3>
                 <div className="space-y-2">
                   <button
                     onClick={() => setSelectedCategory("all")}
@@ -161,7 +181,7 @@ function ActivitiesContent() {
                         : "hover:bg-secondary text-foreground"
                     }`}
                   >
-                    {t("activities.allCategories")}
+                    {t("activities.allCategories") || "Tüm Kategoriler"}
                   </button>
                   {categories.map((category) => (
                     <button
@@ -180,7 +200,7 @@ function ActivitiesContent() {
               </div>
 
               <div>
-                <h3 className="font-semibold text-foreground mb-3">{t("activities.priceRange")}</h3>
+                <h3 className="font-semibold text-foreground mb-3">{t("activities.priceRange") || "Fiyat Aralığı"}</h3>
                 <div className="px-2">
                   <Slider
                     value={priceRange}
@@ -197,7 +217,7 @@ function ActivitiesContent() {
               </div>
 
               <Button variant="outline" onClick={clearFilters} className="w-full">
-                {t("activities.clearFilters")}
+                {t("activities.clearFilters") || "Filtreleri Temizle"}
               </Button>
             </div>
           </aside>
@@ -209,7 +229,7 @@ function ActivitiesContent() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder={t("activities.searchPlaceholder")}
+                  placeholder={t("activities.searchPlaceholder") || "Aktivite ara..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -219,19 +239,18 @@ function ActivitiesContent() {
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="w-[180px]">
                     <SlidersHorizontal className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder={t("common.sort")} />
+                    <SelectValue placeholder={t("common.sort") || "Sırala"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="popular">{t("activities.sortPopular")}</SelectItem>
-                    <SelectItem value="rating">{t("activities.sortRating")}</SelectItem>
-                    <SelectItem value="price-asc">{t("activities.sortPriceLow")}</SelectItem>
-                    <SelectItem value="price-desc">{t("activities.sortPriceHigh")}</SelectItem>
+                    <SelectItem value="popular">{t("activities.sortPopular") || "Popüler"}</SelectItem>
+                    <SelectItem value="rating">{t("activities.sortRating") || "Puana Göre"}</SelectItem>
+                    <SelectItem value="price-asc">{t("activities.sortPriceLow") || "Artan Fiyat"}</SelectItem>
+                    <SelectItem value="price-desc">{t("activities.sortPriceHigh") || "Azalan Fiyat"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {/* Yükleme Ekranı */}
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-20">
                 <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
@@ -240,7 +259,7 @@ function ActivitiesContent() {
             ) : (
               <>
                 <p className="text-sm text-muted-foreground mb-6">
-                  {filteredActivities.length} {t("activities.found")}
+                  {filteredActivities.length} {t("activities.found") || "sonuç bulundu"}
                 </p>
 
                 {filteredActivities.length > 0 ? (
