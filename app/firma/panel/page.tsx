@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
+import Link from "next/link" // Panel içi gezinmeler (Yeni Aktivite vb.) için hala lazım
 import { 
   Plus, LayoutDashboard, Package, Settings, LogOut, Loader2, Star, TrendingUp, MapPin, Home, Info
 } from "lucide-react"
@@ -17,7 +17,7 @@ export default function ProviderDashboard() {
   const [provider, setProvider] = useState<any>(null)
   const [activities, setActivities] = useState<any[]>([])
   
-  // YENİ: Yan menüde hangi sekmenin açık olduğunu tutuyoruz
+  // Yan menüde hangi sekmenin açık olduğunu tutuyoruz
   const [activeTab, setActiveTab] = useState("dashboard")
 
   useEffect(() => {
@@ -70,12 +70,13 @@ export default function ProviderDashboard() {
       {/* YAN MENÜ (Sidebar) */}
       <aside className="w-64 bg-card border-r border-border hidden md:flex flex-col">
         <div className="p-6 border-b border-border">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          {/* DÜZELTME 1: Logo artık 'a' etiketi kullanıyor (Sert Geçiş) */}
+          <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <MapPin className="h-4 w-4 text-primary-foreground" />
             </div>
             <h1 className="text-xl font-bold text-foreground">AktifBilet</h1>
-          </Link>
+          </a>
           <p className="text-xs text-muted-foreground mt-2">Firma Yönetim Paneli</p>
         </div>
         
@@ -104,11 +105,11 @@ export default function ProviderDashboard() {
         </nav>
 
         <div className="p-4 border-t border-border space-y-2">
-          {/* YENİ: Ana Sayfaya Dön Butonu */}
+          {/* DÜZELTME 2: Ana Sayfaya Dön Butonu artık 'a' etiketi kullanıyor (Sert Geçiş) */}
           <Button variant="ghost" asChild className="w-full justify-start text-muted-foreground hover:text-foreground">
-            <Link href="/">
+            <a href="/">
               <Home className="mr-2 h-4 w-4" /> Ana Sayfaya Dön
-            </Link>
+            </a>
           </Button>
           <Button variant="ghost" onClick={handleLogout} className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10">
             <LogOut className="mr-2 h-4 w-4" /> Çıkış Yap
@@ -198,7 +199,6 @@ export default function ProviderDashboard() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {/* Şimdilik butonlar pasif, Listemizin Madde 2'sinde bunları canlandıracağız */}
                     <Button variant="outline" size="sm">Düzenle</Button>
                     <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10 border-destructive/20">Sil</Button>
                   </div>
