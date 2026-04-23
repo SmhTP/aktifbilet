@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link" // Panel içi gezinmeler (Yeni Aktivite vb.) için hala lazım
+import Link from "next/link"
 import { 
-  Plus, LayoutDashboard, Package, Settings, LogOut, Loader2, Star, TrendingUp, MapPin, Home, Info
+  Plus, LayoutDashboard, Package, Settings, LogOut, Loader2, Star, TrendingUp, MapPin, Home, Info, Menu, X
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,8 +17,10 @@ export default function ProviderDashboard() {
   const [provider, setProvider] = useState<any>(null)
   const [activities, setActivities] = useState<any[]>([])
   
-  // Yan menüde hangi sekmenin açık olduğunu tutuyoruz
   const [activeTab, setActiveTab] = useState("dashboard")
+  
+  // YENİ: Mobil menünün açık/kapalı durumunu tutuyoruz
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     async function getDashboardData() {
@@ -57,6 +59,12 @@ export default function ProviderDashboard() {
     router.push("/firma/giris")
   }
 
+  // Menü sekmesi değiştiğinde mobilde menüyü otomatik kapat
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab)
+    setMobileMenuOpen(false)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -66,11 +74,51 @@ export default function ProviderDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-secondary/20 flex">
-      {/* YAN MENÜ (Sidebar) */}
-      <aside className="w-64 bg-card border-r border-border hidden md:flex flex-col">
+    // YENİ: Mobilde flex-col (alt alta), bilgisayarda flex-row (yan yana) dizilimi
+    <div className="min-h-screen bg-secondary/20 flex flex-col md:flex-row">
+      
+      {/* YENİ: SADECE MOBİLDE GÖRÜNEN ÜST MENÜ */}
+      <div className="md:hidden bg-card border-b border-border sticky top-0 z-50">
+        <div className="flex items-center justify-between p-4">
+          <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <MapPin className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <h1 className="text-xl font-bold text-foreground">AktifBilet</h1>
+          </a>
+          <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </Button>
+        </div>
+
+        {/* MOBİL AÇILIR MENÜ İÇERİĞİ */}
+        {mobileMenuOpen && (
+          <div className="p-4 border-t border-border flex flex-col gap-2 bg-card absolute w-full shadow-xl z-40 left-0 top-[73px]">
+            <Button variant={activeTab === "dashboard" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("dashboard")}>
+              <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
+            </Button>
+            <Button variant={activeTab === "activities" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("activities")}>
+              <Package className="mr-2 h-4 w-4" /> Aktivitelerim
+            </Button>
+            <Button variant={activeTab === "settings" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("settings")}>
+              <Settings className="mr-2 h-4 w-4" /> Ayarlar
+            </Button>
+            
+            <div className="h-px bg-border my-2" />
+            
+            <Button variant="ghost" asChild className="w-full justify-start text-muted-foreground hover:text-foreground">
+              <a href="/"><Home className="mr-2 h-4 w-4" /> Ana Sayfaya Dön</a>
+            </Button>
+            <Button variant="ghost" onClick={handleLogout} className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10">
+              <LogOut className="mr-2 h-4 w-4" /> Çıkış Yap
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* SADECE BİLGİSAYARDA GÖRÜNEN YAN MENÜ (Sidebar) */}
+      <aside className="w-64 bg-card border-r border-border hidden md:flex flex-col h-screen sticky top-0">
         <div className="p-6 border-b border-border">
-          {/* DÜZELTME 1: Logo artık 'a' etiketi kullanıyor (Sert Geçiş) */}
           <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <MapPin className="h-4 w-4 text-primary-foreground" />
@@ -81,35 +129,20 @@ export default function ProviderDashboard() {
         </div>
         
         <nav className="flex-1 p-4 space-y-2">
-          <Button 
-            variant={activeTab === "dashboard" ? "secondary" : "ghost"} 
-            className="w-full justify-start"
-            onClick={() => setActiveTab("dashboard")}
-          >
+          <Button variant={activeTab === "dashboard" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("dashboard")}>
             <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
           </Button>
-          <Button 
-            variant={activeTab === "activities" ? "secondary" : "ghost"} 
-            className="w-full justify-start"
-            onClick={() => setActiveTab("activities")}
-          >
+          <Button variant={activeTab === "activities" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("activities")}>
             <Package className="mr-2 h-4 w-4" /> Aktivitelerim
           </Button>
-          <Button 
-            variant={activeTab === "settings" ? "secondary" : "ghost"} 
-            className="w-full justify-start"
-            onClick={() => setActiveTab("settings")}
-          >
+          <Button variant={activeTab === "settings" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("settings")}>
             <Settings className="mr-2 h-4 w-4" /> Ayarlar
           </Button>
         </nav>
 
         <div className="p-4 border-t border-border space-y-2">
-          {/* DÜZELTME 2: Ana Sayfaya Dön Butonu artık 'a' etiketi kullanıyor (Sert Geçiş) */}
           <Button variant="ghost" asChild className="w-full justify-start text-muted-foreground hover:text-foreground">
-            <a href="/">
-              <Home className="mr-2 h-4 w-4" /> Ana Sayfaya Dön
-            </a>
+            <a href="/"><Home className="mr-2 h-4 w-4" /> Ana Sayfaya Dön</a>
           </Button>
           <Button variant="ghost" onClick={handleLogout} className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10">
             <LogOut className="mr-2 h-4 w-4" /> Çıkış Yap
@@ -118,20 +151,20 @@ export default function ProviderDashboard() {
       </aside>
 
       {/* ANA İÇERİK */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        <div className="flex justify-between items-center mb-8">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
           <div>
-            <h2 className="text-3xl font-bold text-foreground">Hoş Geldin, {provider?.name}</h2>
-            <p className="text-muted-foreground">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground">Hoş Geldin, {provider?.name}</h2>
+            <p className="text-sm md:text-base text-muted-foreground mt-1">
               {activeTab === "dashboard" && "İşletmenizin bugünkü durumuna göz atın."}
               {activeTab === "activities" && "Platformda listelenen turlarınızı yönetin."}
               {activeTab === "settings" && "Firma bilgilerinizi ve profilinizi güncelleyin."}
             </p>
           </div>
           {activeTab === "activities" && (
-            <Button size="lg" className="shadow-lg" asChild>
+            <Button className="shadow-lg w-full sm:w-auto" asChild>
               <Link href="/firma/panel/yeni">
-                <Plus className="mr-2 h-5 w-5" /> Yeni Aktivite Ekle
+                <Plus className="mr-2 h-5 w-5" /> Yeni Aktivite
               </Link>
             </Button>
           )}
@@ -140,7 +173,7 @@ export default function ProviderDashboard() {
         {/* --- SEKME 1: DASHBOARD --- */}
         {activeTab === "dashboard" && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Toplam Aktivite</CardTitle>
@@ -170,11 +203,11 @@ export default function ProviderDashboard() {
               </Card>
             </div>
             
-            <div className="bg-card p-6 rounded-xl border border-border flex items-start gap-4">
-              <Info className="h-6 w-6 text-primary shrink-0" />
+            <div className="bg-card p-4 md:p-6 rounded-xl border border-border flex items-start gap-4">
+              <Info className="h-6 w-6 text-primary shrink-0 mt-1" />
               <div>
-                <h4 className="font-semibold">İpucu: Daha fazla rezervasyon alın</h4>
-                <p className="text-sm text-muted-foreground mt-1">Aktivitelerinize yüksek kaliteli fotoğraflar eklemek ve açıklamaları detaylı tutmak müşteri dönüşümlerini %40'a kadar artırır. Aktivitelerim sekmesinden turlarınızı güncelleyebilirsiniz.</p>
+                <h4 className="font-semibold text-sm md:text-base">İpucu: Daha fazla rezervasyon alın</h4>
+                <p className="text-xs md:text-sm text-muted-foreground mt-1 leading-relaxed">Aktivitelerinize yüksek kaliteli fotoğraflar eklemek ve açıklamaları detaylı tutmak müşteri dönüşümlerini %40'a kadar artırır. Aktivitelerim sekmesinden turlarınızı güncelleyebilirsiniz.</p>
               </div>
             </div>
           </div>
@@ -185,30 +218,30 @@ export default function ProviderDashboard() {
           <div className="grid grid-cols-1 gap-4">
             {activities.length > 0 ? (
               activities.map((activity) => (
-                <div key={activity.id} className="bg-card border border-border p-4 rounded-xl flex items-center justify-between hover:shadow-md transition-all">
+                <div key={activity.id} className="bg-card border border-border p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:shadow-md transition-all">
                   <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 bg-secondary rounded-lg overflow-hidden relative">
+                    <div className="h-16 w-16 bg-secondary rounded-lg overflow-hidden relative shrink-0">
                       <img src={activity.image || "/placeholder.jpg"} alt={activity.name?.tr || "Aktivite"} className="object-cover w-full h-full" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-foreground">{activity.name?.tr || "İsimsiz Aktivite"}</h4>
-                      <div className="flex items-center text-sm text-muted-foreground gap-3">
+                      <h4 className="font-semibold text-foreground line-clamp-1">{activity.name?.tr || "İsimsiz Aktivite"}</h4>
+                      <div className="flex items-center text-xs md:text-sm text-muted-foreground gap-3 mt-1">
                         <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {activity.location?.tr || "Konum Yok"}</span>
                         <span className="font-medium text-primary">{activity.price} TL</span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">Düzenle</Button>
-                    <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10 border-destructive/20">Sil</Button>
+                  <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                    <Button variant="outline" size="sm" className="flex-1 sm:flex-none">Düzenle</Button>
+                    <Button variant="outline" size="sm" className="flex-1 sm:flex-none text-destructive hover:bg-destructive/10 border-destructive/20">Sil</Button>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="text-center py-16 bg-card rounded-xl border border-dashed border-border">
+              <div className="text-center py-12 md:py-16 bg-card rounded-xl border border-dashed border-border px-4">
                 <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <h3 className="text-lg font-medium text-foreground mb-2">Henüz Aktivite Yok</h3>
-                <p className="text-muted-foreground mb-4">Müşterilere sunmak için ilk turunuzu hemen oluşturun.</p>
+                <p className="text-sm text-muted-foreground mb-4">Müşterilere sunmak için ilk turunuzu hemen oluşturun.</p>
                 <Button asChild>
                   <Link href="/firma/panel/yeni">Aktivite Ekle</Link>
                 </Button>
