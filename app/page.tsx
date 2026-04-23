@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowRight, Search, Mountain, Waves, Compass, Palette, Landmark, TrendingUp, Shield, Clock, User } from "lucide-react"
+import { ArrowRight, Search, Mountain, Waves, Compass, Palette, Landmark, MapPin, Clock, Star, User, BadgeCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ActivityCard } from "@/components/activity-card"
-import { ProviderCard } from "@/components/provider-card"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
 import { useI18n } from "@/lib/i18n"
 
@@ -27,15 +27,23 @@ const categories = [
   { slug: "workshop", name: "Workshop" }
 ]
 
+// ÇÖKME KORUMASI: Supabase'den gelen JSON verilerini güvenle okur
+const getText = (obj: any, locale: string, fallback = "") => {
+  if (!obj) return fallback;
+  if (typeof obj === 'string') return obj;
+  return obj[locale] || obj['tr'] || fallback;
+}
+
 export default function HomePage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const currentLocale = locale as "tr" | "en"
+  
   const [activities, setActivities] = useState<any[]>([])
   const [providers, setProviders] = useState<any[]>([])
 
-  // GERÇEK VERİLERİ SUPABASE'DEN ÇEKİYORUZ
   useEffect(() => {
     async function fetchData() {
-      // En son eklenen 4 aktiviteyi çek
+      // Aktiviteleri çek
       const { data: actData } = await supabase
         .from("activities")
         .select("*, providers(*)")
@@ -43,20 +51,13 @@ export default function HomePage() {
       
       if (actData) setActivities(actData)
 
-      // En popüler 4 firmayı çek
+      // Firmaları çek
       const { data: provData } = await supabase
         .from("providers")
         .select("*, activities(id)")
         .limit(4)
       
-      if (provData) {
-        const formattedProv = provData.map(p => ({
-          ...p,
-          reviewCount: p.review_count,
-          activities: p.activities || []
-        }))
-        setProviders(formattedProv)
-      }
+      if (provData) setProviders(provData)
     }
     fetchData()
   }, [])
@@ -100,7 +101,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* SADECE MÜŞTERİ GİRİŞİ KALDI (Firma girişi aşağıya taşındı) */}
           <div className="mt-8 flex justify-center max-w-2xl mx-auto">
             <Link href="/kullanici/giris">
               <Button variant="outline" className="h-12 bg-background/20 hover:bg-background/40 border-white/30 text-white backdrop-blur-sm transition-all px-8">
@@ -134,87 +134,120 @@ export default function HomePage() {
             <h2 className="text-3xl font-bold text-foreground">Kategoriler</h2>
             <p className="mt-2 text-muted-foreground">Size en uygun aktiviteyi seçin</p>
           </div>
-          
           <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {categories.map((category) => (
-              <Link
-                key={category.slug}
-                href={`/aktiviteler?kategori=${category.slug}`}
-                className="group flex flex-col items-center p-6 bg-card rounded-xl border border-border hover:border-primary/50 hover:shadow-lg transition-all duration-300"
-              >
+              <Link key={category.slug} href={`/aktiviteler?kategori=${category.slug}`} className="group flex flex-col items-center p-6 bg-card rounded-xl border border-border hover:border-primary/50 hover:shadow-lg transition-all duration-300">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                   {categoryIcons[category.slug]}
                 </div>
-                <span className="mt-4 font-medium text-foreground text-center">
-                  {category.name}
-                </span>
+                <span className="mt-4 font-medium text-foreground text-center">{category.name}</span>
               </Link>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Gerçek Aktiviteler */}
+      {/* Aktiviteler */}
       <section className="py-16 bg-secondary/50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-10">
             <div>
               <h2 className="text-3xl font-bold text-foreground">Öne Çıkan Aktiviteler</h2>
               <p className="mt-2 text-muted-foreground">En çok tercih edilen turlar</p>
             </div>
             <Button variant="ghost" asChild className="hidden sm:flex text-primary hover:text-primary/80">
-              <Link href="/aktiviteler">
-                Tümünü Gör <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
+              <Link href="/aktiviteler">Tümünü Gör <ArrowRight className="ml-2 h-4 w-4" /></Link>
             </Button>
           </div>
           
-          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {activities.length > 0 ? activities.map((activity) => (
-              <ActivityCard key={activity.id} activity={activity} />
-            )) : <p className="text-muted-foreground">Aktiviteler yükleniyor...</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {activities.length > 0 ? activities.map((activity) => {
+              const name = getText(activity.name, currentLocale, "İsimsiz Aktivite")
+              const location = getText(activity.location, currentLocale, "Konum Yok")
+              return (
+                <Link key={activity.id} href={`/aktiviteler/${activity.slug}`} className="group relative flex flex-col overflow-hidden rounded-2xl bg-card transition-all hover:shadow-xl border border-border">
+                  <div className="relative aspect-[4/3] overflow-hidden">
+                    <Image src={activity.image || "/placeholder.jpg"} alt={name} fill className="object-cover transition-transform duration-300 group-hover:scale-105" />
+                    <Badge className="absolute left-3 top-3 bg-background/90 text-foreground backdrop-blur-sm hover:bg-background/90">{activity.category || "Genel"}</Badge>
+                  </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <h3 className="line-clamp-1 font-semibold text-lg text-foreground group-hover:text-primary transition-colors">{name}</h3>
+                    <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      <span className="line-clamp-1">{location}</span>
+                    </div>
+                    {activity.duration && (
+                      <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4 text-primary" />
+                        <span>{typeof activity.duration === 'string' ? activity.duration : getText(activity.duration, currentLocale, "")}</span>
+                      </div>
+                    )}
+                    <div className="mt-auto pt-4 flex items-center justify-between border-t border-border mt-4">
+                      <p className="text-lg font-bold text-primary">{activity.price} TL</p>
+                      <Button variant="secondary" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">İncele</Button>
+                    </div>
+                  </div>
+                </Link>
+              )
+            }) : <p className="text-muted-foreground">Aktiviteler yükleniyor...</p>}
           </div>
         </div>
       </section>
 
-      {/* Gerçek Firmalar */}
+      {/* Firmalar */}
       <section className="py-16 bg-background">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-10">
             <div>
               <h2 className="text-3xl font-bold text-foreground">Popüler Firmalar</h2>
               <p className="mt-2 text-muted-foreground">Alanında uzman ekipler</p>
             </div>
             <Button variant="ghost" asChild className="hidden sm:flex text-primary hover:text-primary/80">
-              <Link href="/firmalar">
-                Tümünü Gör <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
+              <Link href="/firmalar">Tümünü Gör <ArrowRight className="ml-2 h-4 w-4" /></Link>
             </Button>
           </div>
           
-          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {providers.length > 0 ? providers.map((provider) => (
-              <ProviderCard key={provider.id} provider={provider} />
+              <Link key={provider.id} href={`/firmalar/${provider.slug}`}>
+                <Card className="hover:shadow-lg transition-all border-border hover:border-primary/50">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-4">
+                      <div className="h-16 w-16 bg-secondary rounded-xl flex items-center justify-center text-2xl font-bold text-primary border border-border">
+                        {provider.name[0]}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1">
+                          <h3 className="font-bold text-lg line-clamp-1">{provider.name}</h3>
+                          <BadgeCheck className="h-4 w-4 text-primary shrink-0" />
+                        </div>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+                          <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                          <span className="font-medium text-foreground">{provider.rating || 0}</span>
+                          <span>({provider.review_count || 0})</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
             )) : <p className="text-muted-foreground">Firmalar yükleniyor...</p>}
           </div>
         </div>
       </section>
 
-      {/* FOOTER (Firma Girişi Gizli Alanı) */}
       <footer className="bg-card border-t border-border py-8 mt-10">
         <div className="mx-auto max-w-7xl px-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">© 2026 AktifBilet. Tüm Hakları Saklıdır.</p>
           <div className="flex items-center gap-4 text-sm">
             <Link href="/hakkimizda" className="text-muted-foreground hover:text-primary">Hakkımızda</Link>
             <Link href="/iletisim" className="text-muted-foreground hover:text-primary">İletişim</Link>
-            {/* FİRMA GİRİŞİ ARTIK BURADA */}
             <Link href="/firma/giris" className="text-primary font-medium hover:underline border-l border-border pl-4">
-              İş Ortaklarımız (Firma Girişi)
+              İş Ortaklarımız
             </Link>
           </div>
         </div>
       </footer>
-
     </div>
   )
 }
