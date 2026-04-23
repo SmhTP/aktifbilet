@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { 
-  Plus, LayoutDashboard, Package, Settings, LogOut, Loader2, Star, TrendingUp, MapPin, Home, Info, Menu, X
+  Plus, LayoutDashboard, Package, Settings, LogOut, Loader2, Star, TrendingUp, MapPin, Home, Info, Menu, X, Save
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +19,11 @@ export default function ProviderDashboard() {
   
   const [activeTab, setActiveTab] = useState("dashboard")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // YENİ: Ayarlar sekmesi için state'ler
+  const [settingsDesc, setSettingsDesc] = useState("")
+  const [settingsEmail, setSettingsEmail] = useState("")
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false)
 
   useEffect(() => {
     async function getDashboardData() {
@@ -37,6 +42,9 @@ export default function ProviderDashboard() {
 
       if (providerData) {
         setProvider(providerData)
+        // Veritabanından gelen bilgileri ayarlar formuna dolduruyoruz
+        setSettingsDesc(providerData.description || "")
+        setSettingsEmail(providerData.email || `iletisim@${providerData.slug}.com`)
 
         const { data: activityData } = await supabase
           .from("activities")
@@ -57,7 +65,6 @@ export default function ProviderDashboard() {
     router.push("/firma/giris")
   }
 
-  // YENİ: Silme İşlemi Fonksiyonu
   const handleDelete = async (id: string) => {
     const confirmDelete = confirm("Bu aktiviteyi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")
     if (!confirmDelete) return
@@ -71,7 +78,6 @@ export default function ProviderDashboard() {
       alert("Silme işlemi sırasında bir hata oluştu.")
       console.error(error)
     } else {
-      // Ekranda listeyi güncelle (silineni listeden çıkar)
       setActivities(activities.filter(act => act.id !== id))
     }
   }
@@ -79,6 +85,30 @@ export default function ProviderDashboard() {
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     setMobileMenuOpen(false)
+  }
+
+  // YENİ: Ayarları Güncelleme Fonksiyonu
+  const handleUpdateSettings = async () => {
+    setIsUpdatingSettings(true)
+
+    const { error } = await supabase
+      .from("providers")
+      .update({
+        description: settingsDesc,
+        email: settingsEmail
+      })
+      .eq("id", provider.id)
+
+    if (error) {
+      alert("Bilgiler güncellenirken bir hata oluştu. Lütfen tekrar deneyin.")
+      console.error(error)
+    } else {
+      alert("Firma profiliniz başarıyla güncellendi!")
+      // Ekranda görünen genel provider state'ini de güncelleyelim
+      setProvider({ ...provider, description: settingsDesc, email: settingsEmail })
+    }
+
+    setIsUpdatingSettings(false)
   }
 
   if (loading) {
@@ -236,11 +266,9 @@ export default function ProviderDashboard() {
                     </div>
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                    {/* YENİ: Düzenle Butonu (Linklendi) */}
                     <Button variant="outline" size="sm" className="flex-1 sm:flex-none" asChild>
                       <Link href={`/firma/panel/duzenle/${activity.id}`}>Düzenle</Link>
                     </Button>
-                    {/* YENİ: Sil Butonu (Fonksiyona bağlandı) */}
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -265,6 +293,7 @@ export default function ProviderDashboard() {
           </div>
         )}
 
+        {/* --- YENİLENEN AYARLAR SEKMESİ --- */}
         {activeTab === "settings" && (
           <div className="max-w-2xl">
             <Card>
@@ -279,17 +308,35 @@ export default function ProviderDashboard() {
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">İletişim E-postası</label>
-                  <Input defaultValue={`iletisim@${provider?.slug}.com`} />
+                  {/* YENİ: State'e bağlandı */}
+                  <Input 
+                    value={settingsEmail} 
+                    onChange={(e) => setSettingsEmail(e.target.value)} 
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">Hakkımızda (Kısa Açıklama)</label>
+                  {/* YENİ: State'e bağlandı */}
                   <textarea 
-                    className="w-full min-h-[100px] p-3 rounded-md border border-input bg-background text-sm"
-                    defaultValue={provider?.description || ""}
+                    className="w-full min-h-[100px] p-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    value={settingsDesc}
+                    onChange={(e) => setSettingsDesc(e.target.value)}
                     placeholder="Firmanızı müşterilere tanıtın..."
                   />
                 </div>
-                <Button className="w-full">Bilgileri Güncelle</Button>
+                {/* YENİ: Fonksiyona bağlandı ve Loading eklendi */}
+                <Button 
+                  className="w-full h-11" 
+                  onClick={handleUpdateSettings} 
+                  disabled={isUpdatingSettings}
+                >
+                  {isUpdatingSettings ? (
+                    <Loader2 className="animate-spin mr-2 h-4 w-4" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Bilgileri Güncelle
+                </Button>
               </CardContent>
             </Card>
           </div>
