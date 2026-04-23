@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { User, Mail, Phone, MapPin, Calendar, Edit2, Camera, Bell, Shield, LogOut } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { User, Mail, Phone, MapPin, Calendar, Edit2, Camera, Bell, Shield, LogOut, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,39 +13,74 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { useI18n } from "@/lib/i18n"
-
-const mockUser = {
-  id: "1",
-  name: "Ahmet Yilmaz",
-  email: "ahmet@example.com",
-  phone: "+90 532 123 4567",
-  location: "Istanbul, Turkiye",
-  avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop",
-  memberSince: "2023",
-  totalBookings: 12,
-  totalReviews: 8,
-}
+import { supabase } from "@/lib/supabase"
 
 export default function ProfilePage() {
   const { t } = useI18n()
+  const router = useRouter()
+  
+  // Supabase State'leri
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState({
-    name: mockUser.name,
-    email: mockUser.email,
-    phone: mockUser.phone,
-    location: mockUser.location,
+    name: "",
+    email: "",
+    phone: "+90 532 000 0000", // Şimdilik varsayılan
+    location: "Türkiye", // Şimdilik varsayılan
   })
+
+  // Oturum Kontrolü
+  useEffect(() => {
+    async function getUser() {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        router.push("/kullanici/giris")
+      } else {
+        setUser(user)
+        setFormData({
+          name: user.user_metadata?.full_name || "İsimsiz Kullanıcı",
+          email: user.email || "",
+          phone: "+90 532 000 0000",
+          location: "Türkiye",
+        })
+      }
+      setLoading(false)
+    }
+    getUser()
+  }, [router])
 
   const handleSave = () => {
     setIsEditing(false)
+    // Gelecekte buraya isim/telefon güncelleme kodu eklenebilir
   }
+
+  // YENİ: Gerçek Çıkış Yapma Fonksiyonu
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push("/")
+    router.refresh()
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        <Loader2 className="animate-spin h-10 w-10 text-primary mb-4" />
+        <p className="text-muted-foreground">Profiliniz yükleniyor...</p>
+      </div>
+    )
+  }
+
+  if (!user) return null
 
   return (
     <div className="min-h-screen bg-background">
       <div className="bg-primary/5 border-b border-border">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-          <h1 className="text-3xl font-bold text-foreground">{t("profile.header")}</h1>
-          <p className="mt-2 text-muted-foreground">{t("profile.headerDesc")}</p>
+          <h1 className="text-3xl font-bold text-foreground">{t("profile.header") || "Profilim"}</h1>
+          <p className="mt-2 text-muted-foreground">{t("profile.headerDesc") || "Kişisel bilgilerinizi ve hesap ayarlarınızı yönetin."}</p>
         </div>
       </div>
 
@@ -55,10 +91,11 @@ export default function ProfilePage() {
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center">
                   <div className="relative">
-                    <div className="relative h-24 w-24 rounded-full overflow-hidden">
+                    <div className="relative h-24 w-24 rounded-full overflow-hidden bg-secondary">
+                      {/* Şimdilik varsayılan bir avatar kullanıyoruz */}
                       <Image
-                        src={mockUser.avatar}
-                        alt={mockUser.name}
+                        src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop"
+                        alt="Avatar"
                         fill
                         className="object-cover"
                       />
@@ -67,21 +104,22 @@ export default function ProfilePage() {
                       <Camera className="h-4 w-4" />
                     </button>
                   </div>
-                  <h2 className="mt-4 text-xl font-semibold text-foreground">{mockUser.name}</h2>
-                  <p className="text-muted-foreground">{mockUser.email}</p>
+                  {/* GERÇEK VERİLER */}
+                  <h2 className="mt-4 text-xl font-semibold text-foreground">{formData.name}</h2>
+                  <p className="text-muted-foreground">{formData.email}</p>
                   <Badge variant="secondary" className="mt-2">
-                    {mockUser.memberSince} {t("profile.memberSince")}
+                    Yeni Üye
                   </Badge>
                 </div>
 
                 <div className="mt-8 grid grid-cols-2 gap-4">
                   <div className="text-center p-4 bg-secondary/50 rounded-lg">
-                    <p className="text-2xl font-bold text-primary">{mockUser.totalBookings}</p>
-                    <p className="text-sm text-muted-foreground">{t("profile.reservations")}</p>
+                    <p className="text-2xl font-bold text-primary">0</p>
+                    <p className="text-sm text-muted-foreground">{t("profile.reservations") || "Rezervasyon"}</p>
                   </div>
                   <div className="text-center p-4 bg-secondary/50 rounded-lg">
-                    <p className="text-2xl font-bold text-primary">{mockUser.totalReviews}</p>
-                    <p className="text-sm text-muted-foreground">{t("profile.evaluations")}</p>
+                    <p className="text-2xl font-bold text-primary">0</p>
+                    <p className="text-sm text-muted-foreground">{t("profile.evaluations") || "Değerlendirme"}</p>
                   </div>
                 </div>
 
@@ -89,12 +127,13 @@ export default function ProfilePage() {
                   <Button asChild variant="outline" className="w-full justify-start">
                     <Link href="/etkinliklerim">
                       <Calendar className="mr-2 h-4 w-4" />
-                      {t("myEvents.title")}
+                      {t("myEvents.title") || "Biletlerim"}
                     </Link>
                   </Button>
-                  <Button variant="outline" className="w-full justify-start text-destructive hover:text-destructive">
+                  {/* YENİ: Buton onClick fonksiyonuna bağlandı */}
+                  <Button onClick={handleLogout} variant="outline" className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10">
                     <LogOut className="mr-2 h-4 w-4" />
-                    {t("profile.logout")}
+                    {t("profile.logout") || "Çıkış Yap"}
                   </Button>
                 </div>
               </CardContent>
@@ -104,22 +143,22 @@ export default function ProfilePage() {
           <div className="lg:col-span-2">
             <Tabs defaultValue="profile" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="profile">{t("profile.personalInfoTitle")}</TabsTrigger>
-                <TabsTrigger value="notifications">{t("profile.notificationSettings")}</TabsTrigger>
-                <TabsTrigger value="security">{t("profile.security")}</TabsTrigger>
+                <TabsTrigger value="profile">{t("profile.personalInfoTitle") || "Kişisel Bilgiler"}</TabsTrigger>
+                <TabsTrigger value="notifications">{t("profile.notificationSettings") || "Bildirimler"}</TabsTrigger>
+                <TabsTrigger value="security">{t("profile.security") || "Güvenlik"}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="profile" className="mt-6">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>{t("profile.personalInfoTitle")}</CardTitle>
+                    <CardTitle>{t("profile.personalInfoTitle") || "Kişisel Bilgiler"}</CardTitle>
                     <Button
                       variant={isEditing ? "default" : "outline"}
                       size="sm"
                       onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
                       className={isEditing ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}
                     >
-                      {isEditing ? t("common.save") : <><Edit2 className="mr-2 h-4 w-4" />{t("common.edit")}</>}
+                      {isEditing ? t("common.save") || "Kaydet" : <><Edit2 className="mr-2 h-4 w-4" />{t("common.edit") || "Düzenle"}</>}
                     </Button>
                   </CardHeader>
                   <CardContent className="space-y-6">
@@ -127,7 +166,7 @@ export default function ProfilePage() {
                       <div className="space-y-2">
                         <Label htmlFor="name" className="flex items-center gap-2">
                           <User className="h-4 w-4" />
-                          {t("profile.fullName")}
+                          {t("profile.fullName") || "Ad Soyad"}
                         </Label>
                         {isEditing ? (
                           <Input
@@ -136,29 +175,30 @@ export default function ProfilePage() {
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                           />
                         ) : (
-                          <p className="text-foreground py-2">{formData.name}</p>
+                          <p className="text-foreground py-2 font-medium">{formData.name}</p>
                         )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="email" className="flex items-center gap-2">
                           <Mail className="h-4 w-4" />
-                          {t("profile.email")}
+                          {t("profile.email") || "E-posta"}
                         </Label>
                         {isEditing ? (
                           <Input
                             id="email"
                             type="email"
                             value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            disabled // E-posta değiştirme genelde kapalı olur
+                            className="bg-secondary"
                           />
                         ) : (
-                          <p className="text-foreground py-2">{formData.email}</p>
+                          <p className="text-foreground py-2 font-medium">{formData.email}</p>
                         )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="phone" className="flex items-center gap-2">
                           <Phone className="h-4 w-4" />
-                          {t("profile.phone")}
+                          {t("profile.phone") || "Telefon"}
                         </Label>
                         {isEditing ? (
                           <Input
@@ -167,13 +207,13 @@ export default function ProfilePage() {
                             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                           />
                         ) : (
-                          <p className="text-foreground py-2">{formData.phone}</p>
+                          <p className="text-foreground py-2 font-medium">{formData.phone}</p>
                         )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="location" className="flex items-center gap-2">
                           <MapPin className="h-4 w-4" />
-                          {t("common.location")}
+                          {t("common.location") || "Konum"}
                         </Label>
                         {isEditing ? (
                           <Input
@@ -182,17 +222,17 @@ export default function ProfilePage() {
                             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                           />
                         ) : (
-                          <p className="text-foreground py-2">{formData.location}</p>
+                          <p className="text-foreground py-2 font-medium">{formData.location}</p>
                         )}
                       </div>
                     </div>
                     {isEditing && (
                       <div className="flex justify-end gap-2 pt-4 border-t border-border">
                         <Button variant="outline" onClick={() => setIsEditing(false)}>
-                          {t("common.cancel")}
+                          {t("common.cancel") || "İptal"}
                         </Button>
                         <Button onClick={handleSave} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                          {t("profile.saveChanges")}
+                          {t("profile.saveChanges") || "Değişiklikleri Kaydet"}
                         </Button>
                       </div>
                     )}
@@ -205,37 +245,30 @@ export default function ProfilePage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Bell className="h-5 w-5" />
-                      {t("profile.notificationSettings")}
+                      {t("profile.notificationSettings") || "Bildirim Ayarları"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-foreground">{t("profile.emailNotifications")}</p>
-                        <p className="text-sm text-muted-foreground">{t("profile.bookingCampaignNotif")}</p>
+                        <p className="font-medium text-foreground">{t("profile.emailNotifications") || "E-posta Bildirimleri"}</p>
+                        <p className="text-sm text-muted-foreground">{t("profile.bookingCampaignNotif") || "Rezervasyon ve kampanya bildirimleri"}</p>
                       </div>
                       <Switch defaultChecked />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-foreground">{t("profile.smsNotifications")}</p>
-                        <p className="text-sm text-muted-foreground">{t("profile.bookingReminders")}</p>
+                        <p className="font-medium text-foreground">{t("profile.smsNotifications") || "SMS Bildirimleri"}</p>
+                        <p className="text-sm text-muted-foreground">{t("profile.bookingReminders") || "Rezervasyon hatırlatıcıları"}</p>
                       </div>
                       <Switch defaultChecked />
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-foreground">{t("profile.campaignNotifications")}</p>
-                        <p className="text-sm text-muted-foreground">{t("profile.specialOffers")}</p>
+                        <p className="font-medium text-foreground">{t("profile.campaignNotifications") || "Kampanya Bildirimleri"}</p>
+                        <p className="text-sm text-muted-foreground">{t("profile.specialOffers") || "Özel teklifler"}</p>
                       </div>
                       <Switch />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-foreground">{t("profile.reviewReminders")}</p>
-                        <p className="text-sm text-muted-foreground">{t("profile.reviewRemindersDesc")}</p>
-                      </div>
-                      <Switch defaultChecked />
                     </div>
                   </CardContent>
                 </Card>
@@ -246,35 +279,26 @@ export default function ProfilePage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Shield className="h-5 w-5" />
-                      {t("profile.securitySettings")}
+                      {t("profile.securitySettings") || "Güvenlik Ayarları"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="space-y-4">
                       <div>
-                        <h3 className="font-medium text-foreground mb-2">{t("profile.changePassword")}</h3>
+                        <h3 className="font-medium text-foreground mb-2">{t("profile.changePassword") || "Şifre Değiştir"}</h3>
                         <div className="space-y-4">
                           <div className="space-y-2">
-                            <Label htmlFor="current-password">{t("profile.currentPassword")}</Label>
+                            <Label htmlFor="current-password">{t("profile.currentPassword") || "Mevcut Şifre"}</Label>
                             <Input id="current-password" type="password" />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="new-password">{t("profile.newPassword")}</Label>
+                            <Label htmlFor="new-password">{t("profile.newPassword") || "Yeni Şifre"}</Label>
                             <Input id="new-password" type="password" />
                           </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="confirm-password">{t("profile.newPasswordRepeat")}</Label>
-                            <Input id="confirm-password" type="password" />
-                          </div>
                           <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                            {t("profile.updatePassword")}
+                            {t("profile.updatePassword") || "Şifreyi Güncelle"}
                           </Button>
                         </div>
-                      </div>
-                      <div className="pt-6 border-t border-border">
-                        <h3 className="font-medium text-foreground mb-2">{t("profile.twoFactorAuth")}</h3>
-                        <p className="text-sm text-muted-foreground mb-4">{t("profile.twoFactorDesc")}</p>
-                        <Button variant="outline">{t("profile.enable")}</Button>
                       </div>
                     </div>
                   </CardContent>

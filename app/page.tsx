@@ -40,10 +40,17 @@ export default function HomePage() {
   
   const [activities, setActivities] = useState<any[]>([])
   const [providers, setProviders] = useState<any[]>([])
+  
+  // YENİ EKLENDİ: Kullanıcı State'i
+  const [user, setUser] = useState<any>(null) 
 
   useEffect(() => {
     async function fetchData() {
-      // Aktiviteleri çek
+      // 1. Kullanıcı oturumunu kontrol et
+      const { data: authData } = await supabase.auth.getUser()
+      if (authData?.user) setUser(authData.user)
+
+      // 2. Aktiviteleri çek
       const { data: actData } = await supabase
         .from("activities")
         .select("*, providers(*)")
@@ -51,7 +58,7 @@ export default function HomePage() {
       
       if (actData) setActivities(actData)
 
-      // Firmaları çek
+      // 3. Firmaları çek
       const { data: provData } = await supabase
         .from("providers")
         .select("*, activities(id)")
@@ -101,14 +108,23 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* AKILLI BUTON: Kullanıcı giriş yapmışsa Profilime Git yazar */}
           <div className="mt-8 flex justify-center max-w-2xl mx-auto">
-            {/* Button'a asChild eklendi ve Link içeri alındı */}
-            <Button asChild variant="outline" className="h-12 bg-background/20 hover:bg-background/40 border-white/30 text-white backdrop-blur-sm transition-all px-8">
-              <Link href="/kullanici/giris">
-                <User className="mr-2 h-4 w-4" />
-                Kullanıcı Girişi Yap
-              </Link>
-            </Button>
+            {user ? (
+              <Button asChild variant="outline" className="h-12 bg-background/20 hover:bg-background/40 border-white/30 text-white backdrop-blur-sm transition-all px-8">
+                <Link href="/profil">
+                  <User className="mr-2 h-4 w-4" />
+                  Profilime Git
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="outline" className="h-12 bg-background/20 hover:bg-background/40 border-white/30 text-white backdrop-blur-sm transition-all px-8">
+                <Link href="/kullanici/giris">
+                  <User className="mr-2 h-4 w-4" />
+                  Kullanıcı Girişi Yap
+                </Link>
+              </Button>
+            )}
           </div>
 
           <div className="mt-12 flex flex-wrap justify-center gap-8">
