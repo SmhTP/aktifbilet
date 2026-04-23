@@ -1,9 +1,9 @@
 "use client"
 
-import { use } from "react"
+import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { notFound } from "next/navigation"
 import {
   Star,
   MapPin,
@@ -14,19 +14,15 @@ import {
   BadgeCheck,
   ChevronRight,
   Clock,
-  Users,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RatingStars } from "@/components/rating-stars"
-import { getProviderBySlug, activities, reviews } from "@/lib/data"
+import { supabase } from "@/lib/supabase"
 import { useI18n } from "@/lib/i18n"
-
-interface PageProps {
-  params: Promise<{ slug: string }>
-}
 
 const categoryTranslationKeys: Record<string, string> = {
   "doga-sporlari": "category.natureSports",
@@ -36,24 +32,72 @@ const categoryTranslationKeys: Record<string, string> = {
   "kultur-sanat": "category.culturalArt",
 }
 
-export default function ProviderDetailPage({ params }: PageProps) {
+// Güvenli metin okuyucu (JSON veya düz metin çökmelerini engeller)
+const getText = (obj: any, locale: string, fallback = "") => {
+  if (!obj) return fallback;
+  if (typeof obj === 'string') return obj;
+  return obj[locale] || obj['tr'] || fallback;
+}
+
+export default function ProviderDetailPage() {
   const { t, locale } = useI18n()
-  const { slug } = use(params)
-  const provider = getProviderBySlug(slug)
-  
-  // TypeScript için locale tipi
+  const params = useParams()
   const currentLocale = locale as "tr" | "en"
 
-  if (!provider) {
-    notFound()
+  const [provider, setProvider] = useState<any>(null)
+  const [activities, setActivities] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchProviderAndActivities() {
+      if (!params.slug) return
+
+      // 1. Firmayı (Provider) slug üzerinden bul
+      const { data: pData, error: pError } = await supabase
+        .from("providers")
+        .select("*")
+        .eq("slug", params.slug)
+        .single()
+
+      if (pData) {
+        setProvider(pData)
+
+        // 2. Bu firmaya ait tüm aktiviteleri çek
+        const { data: aData } = await supabase
+          .from("activities")
+          .select("*")
+          .eq("provider_id", pData.id)
+        
+        if (aData) setActivities(aData)
+      } else {
+        console.error("Firma bulunamadı:", pError)
+      }
+      
+      setLoading(false)
+    }
+
+    fetchProviderAndActivities()
+  }, [params.slug])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Firma detayları yükleniyor...</p>
+      </div>
+    )
   }
 
-  const providerActivities = provider.activities.map((pa) => {
-    const activity = activities.find((a) => a.id === pa.activityId)
-    return { ...pa, activity }
-  }).filter((pa) => pa.activity)
-
-  const providerReviews = reviews.filter((r) => r.providerId === provider.id)
+  if (!provider) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-center">
+        <div>
+          <h2 className="text-2xl font-bold mb-4">Firma Bulunamadı</h2>
+          <Button asChild><Link href="/firmalar">Firmalara Dön</Link></Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -61,11 +105,11 @@ export default function ProviderDetailPage({ params }: PageProps) {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3">
           <nav className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/" className="hover:text-foreground transition-colors">
-              {t("booking.breadcrumbHome")}
+              {t("booking.breadcrumbHome") || "Ana Sayfa"}
             </Link>
             <ChevronRight className="h-4 w-4" />
             <Link href="/firmalar" className="hover:text-foreground transition-colors">
-              {t("providers.header")}
+              {t("providers.header") || "Firmalar"}
             </Link>
             <ChevronRight className="h-4 w-4" />
             <span className="text-foreground">{provider.name}</span>
@@ -74,44 +118,34 @@ export default function ProviderDetailPage({ params }: PageProps) {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        {/* Firma Başlık Alanı */}
         <div className="flex flex-col md:flex-row gap-6 mb-8">
-          <div className="relative h-32 w-32 shrink-0 rounded-2xl overflow-hidden">
-            <Image
-              src={provider.logo}
-              alt={provider.name}
-              fill
-              className="object-cover"
-              priority
-            />
+          <div className="relative h-32 w-32 shrink-0 rounded-2xl overflow-hidden bg-secondary border border-border flex items-center justify-center text-4xl font-bold text-primary">
+            {/* Logo yoksa isminin ilk harfini basıyoruz */}
+            {provider.name[0]}
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-3xl font-bold text-foreground">{provider.name}</h1>
-              {provider.verified && (
-                <Badge className="bg-primary text-primary-foreground gap-1">
-                  <BadgeCheck className="h-4 w-4" />
-                  {t("providerDetail.verifiedCompany")}
-                </Badge>
-              )}
+              <Badge className="bg-primary text-primary-foreground gap-1">
+                <BadgeCheck className="h-4 w-4" />
+                Doğrulanmış İşletme
+              </Badge>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-4 text-muted-foreground">
               <div className="flex items-center gap-1">
-                <RatingStars rating={provider.rating} />
-                <span className="font-semibold text-foreground ml-1">{provider.rating}</span>
-                <span>({provider.reviewCount} {t("common.reviews")})</span>
+                <RatingStars rating={provider.rating || 0} />
+                <span className="font-semibold text-foreground ml-1">{provider.rating || 0}</span>
+                <span>({provider.review_count || 0} Yorum)</span>
               </div>
               <div className="flex items-center gap-1">
                 <MapPin className="h-5 w-5" />
-                <span>{provider.location}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-5 w-5" />
-                <span>{provider.founded} {t("providerDetail.servingSince")}</span>
+                {/* Şimdilik varsayılan bir konum atadık */}
+                <span>Türkiye</span>
               </div>
             </div>
-            <p className="mt-4 text-muted-foreground leading-relaxed max-w-2xl">
-              {/* Dinamik Provider Açıklaması */}
-              {provider.description[currentLocale]}
+            <p className="mt-4 text-muted-foreground leading-relaxed max-w-2xl line-clamp-3">
+              {provider.name}, AktifBilet platformunda onaylı bir etkinlik sağlayıcısıdır. Misafirlerimize güvenilir ve unutulmaz deneyimler sunmak için buradayız.
             </p>
           </div>
         </div>
@@ -121,120 +155,93 @@ export default function ProviderDetailPage({ params }: PageProps) {
             <Tabs defaultValue="activities" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="activities">
-                  {t("providerDetail.activities")} ({providerActivities.length})
+                  Aktiviteler ({activities.length})
                 </TabsTrigger>
-                <TabsTrigger value="reviews">{t("providerDetail.reviews")} ({providerReviews.length})</TabsTrigger>
+                <TabsTrigger value="reviews">Değerlendirmeler (0)</TabsTrigger>
               </TabsList>
 
               <TabsContent value="activities" className="mt-6">
                 <div className="space-y-4">
-                  {providerActivities.map(({ activity, ...providerActivity }) => (
-                    <Card key={providerActivity.activityId} className="overflow-hidden">
-                      <div className="flex flex-col sm:flex-row">
-                        <div className="relative w-full sm:w-48 h-40 shrink-0">
-                          <Image
-                            src={activity!.image}
-                            alt={activity!.name[currentLocale]}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                        <CardContent className="flex-1 p-4">
-                          <div className="flex flex-col h-full justify-between">
-                            <div>
-                              <div className="flex items-start justify-between gap-4">
-                                <div>
-                                  <Link
-                                    href={`/aktiviteler/${activity!.slug}`}
-                                    className="font-semibold text-lg text-foreground hover:text-primary transition-colors"
-                                  >
-                                    {/* Dinamik Aktivite Adı */}
-                                    {activity!.name[currentLocale]}
-                                  </Link>
-                                  <Badge variant="secondary" className="ml-2 text-xs">
-                                    {t(categoryTranslationKeys[activity!.categorySlug]) || activity!.category}
-                                  </Badge>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  {providerActivity.originalPrice && (
-                                    <p className="text-sm text-muted-foreground line-through">
-                                      {providerActivity.originalPrice} TL
-                                    </p>
-                                  )}
-                                  <p className="text-xl font-bold text-primary">
-                                    {providerActivity.price} TL
-                                  </p>
-                                </div>
-                              </div>
-                              <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
-                                {/* Dinamik Kısa Açıklama */}
-                                {activity!.shortDescription[currentLocale]}
-                              </p>
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <Badge variant="outline" className="text-xs">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  {providerActivity.duration}
-                                </Badge>
-                                <Badge variant="outline" className="text-xs">
-                                  <Users className="h-3 w-3 mr-1" />
-                                  {providerActivity.minParticipants}-{providerActivity.maxParticipants} {t("common.person")}
-                                </Badge>
-                              </div>
-                            </div>
-                            <div className="mt-4 flex gap-2">
-                              <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                                <Link
-                                  href={`/rezervasyon/${activity!.slug}?firma=${provider.slug}`}
-                                >
-                                  {t("common.book")}
-                                </Link>
-                              </Button>
-                              <Button asChild variant="outline" size="sm">
-                                <Link href={`/aktiviteler/${activity!.slug}`}>
-                                  {t("common.details")}
-                                </Link>
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </TabsContent>
+                  {activities.length > 0 ? (
+                    activities.map((activity) => {
+                      const activityName = getText(activity.name, currentLocale, "İsimsiz Aktivite");
+                      const activityDesc = getText(activity.description, currentLocale, "");
+                      const activityCat = t(categoryTranslationKeys[activity.categorySlug]) || activity.categorySlug;
+                      const duration = typeof activity.duration === 'string' ? activity.duration : getText(activity.duration, currentLocale, "");
 
-              <TabsContent value="reviews" className="mt-6">
-                <div className="space-y-4">
-                  {providerReviews.length > 0 ? (
-                    providerReviews.map((review) => (
-                      <Card key={review.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-4">
-                            <div className="relative h-10 w-10 shrink-0 rounded-full overflow-hidden">
+                      return (
+                        <Card key={activity.id} className="overflow-hidden hover:border-primary/50 transition-all">
+                          <div className="flex flex-col sm:flex-row">
+                            <div className="relative w-full sm:w-48 h-48 sm:h-auto shrink-0 bg-secondary">
                               <Image
-                                src={review.userAvatar}
-                                alt={review.userName}
+                                src={activity.image || "/placeholder.jpg"}
+                                alt={activityName}
                                 fill
                                 className="object-cover"
                               />
                             </div>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <h4 className="font-medium text-foreground">{review.userName}</h4>
-                                <span className="text-sm text-muted-foreground">{review.date}</span>
+                            <CardContent className="flex-1 p-4">
+                              <div className="flex flex-col h-full justify-between">
+                                <div>
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                      <Link
+                                        href={`/aktiviteler/${activity.slug}`}
+                                        className="font-semibold text-lg text-foreground hover:text-primary transition-colors"
+                                      >
+                                        {activityName}
+                                      </Link>
+                                      <Badge variant="secondary" className="ml-2 text-xs">
+                                        {activityCat}
+                                      </Badge>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <p className="text-xl font-bold text-primary">
+                                        {activity.price} TL
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
+                                    {activityDesc}
+                                  </p>
+                                  {duration && (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      <Badge variant="outline" className="text-xs">
+                                        <Clock className="h-3 w-3 mr-1" />
+                                        {duration}
+                                      </Badge>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="mt-4 flex gap-2">
+                                  <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                                    <Link href={`/rezervasyon/${activity.slug}`}>
+                                      Rezervasyon Yap
+                                    </Link>
+                                  </Button>
+                                  <Button asChild variant="outline" size="sm">
+                                    <Link href={`/aktiviteler/${activity.slug}`}>
+                                      Detayları İncele
+                                    </Link>
+                                  </Button>
+                                </div>
                               </div>
-                              <RatingStars rating={review.rating} size="sm" />
-                              <p className="mt-2 text-muted-foreground">{review.comment}</p>
-                            </div>
+                            </CardContent>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))
+                        </Card>
+                      )
+                    })
                   ) : (
-                    <p className="text-center text-muted-foreground py-8">
-                      {t("providerDetail.noReviews")}
-                    </p>
+                    <div className="text-center py-12 bg-secondary/20 rounded-xl border border-dashed border-border">
+                      <p className="text-muted-foreground">Bu firmaya ait henüz bir aktivite bulunmuyor.</p>
+                    </div>
                   )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="reviews" className="mt-6">
+                <div className="text-center py-12 bg-secondary/20 rounded-xl border border-dashed border-border">
+                  <p className="text-muted-foreground">Henüz bir değerlendirme yapılmamış.</p>
                 </div>
               </TabsContent>
             </Tabs>
@@ -244,34 +251,17 @@ export default function ProviderDetailPage({ params }: PageProps) {
             <div className="sticky top-24 space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>{t("providerDetail.contact")}</CardTitle>
+                  <CardTitle>İletişim Bilgileri</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <Phone className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{t("provider.phone")}</p>
-                      <a
-                        href={`tel:${provider.phone}`}
-                        className="font-medium text-foreground hover:text-primary transition-colors"
-                      >
-                        {provider.phone}
-                      </a>
-                    </div>
-                  </div>
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                       <Mail className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">{t("provider.email")}</p>
-                      <a
-                        href={`mailto:${provider.email}`}
-                        className="font-medium text-foreground hover:text-primary transition-colors"
-                      >
-                        {provider.email}
+                      <p className="text-sm text-muted-foreground">E-posta</p>
+                      <a href={`mailto:iletisim@${provider.slug}.com`} className="font-medium text-foreground hover:text-primary transition-colors">
+                        iletisim@{provider.slug}.com
                       </a>
                     </div>
                   </div>
@@ -280,24 +270,10 @@ export default function ProviderDetailPage({ params }: PageProps) {
                       <Globe className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">{t("provider.website")}</p>
-                      <a
-                        href={`https://${provider.website}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-foreground hover:text-primary transition-colors"
-                      >
-                        {provider.website}
+                      <p className="text-sm text-muted-foreground">Web Sitesi</p>
+                      <a href={`https://www.${provider.slug}.com`} target="_blank" rel="noopener noreferrer" className="font-medium text-foreground hover:text-primary transition-colors">
+                        www.{provider.slug}.com
                       </a>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <MapPin className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{t("common.location")}</p>
-                      <p className="font-medium text-foreground">{provider.location}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -305,25 +281,25 @@ export default function ProviderDetailPage({ params }: PageProps) {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>{t("providerDetail.stats")}</CardTitle>
+                  <CardTitle>İstatistikler</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-2xl font-bold text-primary">{provider.rating}</p>
-                      <p className="text-sm text-muted-foreground">{t("providerDetail.avgRating")}</p>
+                      <p className="text-2xl font-bold text-primary">{provider.rating || 0}</p>
+                      <p className="text-sm text-muted-foreground">Puan</p>
                     </div>
                     <div className="text-center p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-2xl font-bold text-primary">{provider.reviewCount}</p>
-                      <p className="text-sm text-muted-foreground">{t("providerDetail.reviews2")}</p>
+                      <p className="text-2xl font-bold text-primary">{provider.review_count || 0}</p>
+                      <p className="text-sm text-muted-foreground">Yorum</p>
                     </div>
                     <div className="text-center p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-2xl font-bold text-primary">{provider.activities.length}</p>
-                      <p className="text-sm text-muted-foreground">{t("providerDetail.activity")}</p>
+                      <p className="text-2xl font-bold text-primary">{activities.length}</p>
+                      <p className="text-sm text-muted-foreground">Aktivite</p>
                     </div>
                     <div className="text-center p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-2xl font-bold text-primary">{new Date().getFullYear() - provider.founded}</p>
-                      <p className="text-sm text-muted-foreground">{t("providerDetail.yearsExp")}</p>
+                      <p className="text-2xl font-bold text-primary">1</p>
+                      <p className="text-sm text-muted-foreground">Yıllık Tecrübe</p>
                     </div>
                   </div>
                 </CardContent>
