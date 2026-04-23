@@ -50,7 +50,7 @@ function ActivitiesContent() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("popular")
-  const [priceRange, setPriceRange] = useState<number[]>([0, 5000])
+  const [priceRange, setPriceRange] = useState<number[]>([0, 50000])
 
   useEffect(() => {
     async function fetchActivities() {
@@ -140,7 +140,7 @@ function ActivitiesContent() {
     setSearchQuery("")
     setSelectedCategory("all")
     setSortBy("popular")
-    setPriceRange([0, 5000])
+    setPriceRange([0, 50000])
   }
 
   const getCategoryName = (category: any) => {
@@ -202,7 +202,7 @@ function ActivitiesContent() {
                   <Slider
                     value={priceRange}
                     onValueChange={setPriceRange}
-                    max={5000}
+                    max={50000}
                     step={100}
                     className="mb-4"
                   />
