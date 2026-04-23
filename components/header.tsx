@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
+import { usePathname } from "next/navigation" // YENİ EKLENDİ
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -17,6 +18,15 @@ import { useI18n } from "@/lib/i18n"
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { t } = useI18n()
+  
+  // YENİ EKLENDİ: Mevcut sayfanın adresini alıyoruz
+  const pathname = usePathname()
+
+  // YENİ EKLENDİ: Eğer adres "/firma" ile başlıyorsa (giriş veya panel fark etmez), 
+  // Header'ı hiç çizme, doğrudan null döndür.
+  if (pathname?.startsWith('/firma')) {
+    return null
+  }
 
   const categories = [
     { name: t("category.natureSports"), href: "/aktiviteler?kategori=doga-sporlari" },
@@ -90,7 +100,7 @@ export function Header() {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/giris">{t("nav.login")}</Link>
+                  <Link href="/kullanici/giris">{t("nav.login")}</Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
