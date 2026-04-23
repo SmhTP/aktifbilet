@@ -18,8 +18,6 @@ export default function ProviderDashboard() {
   const [activities, setActivities] = useState<any[]>([])
   
   const [activeTab, setActiveTab] = useState("dashboard")
-  
-  // YENİ: Mobil menünün açık/kapalı durumunu tutuyoruz
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -59,7 +57,25 @@ export default function ProviderDashboard() {
     router.push("/firma/giris")
   }
 
-  // Menü sekmesi değiştiğinde mobilde menüyü otomatik kapat
+  // YENİ: Silme İşlemi Fonksiyonu
+  const handleDelete = async (id: string) => {
+    const confirmDelete = confirm("Bu aktiviteyi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")
+    if (!confirmDelete) return
+
+    const { error } = await supabase
+      .from("activities")
+      .delete()
+      .eq("id", id)
+
+    if (error) {
+      alert("Silme işlemi sırasında bir hata oluştu.")
+      console.error(error)
+    } else {
+      // Ekranda listeyi güncelle (silineni listeden çıkar)
+      setActivities(activities.filter(act => act.id !== id))
+    }
+  }
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     setMobileMenuOpen(false)
@@ -74,10 +90,9 @@ export default function ProviderDashboard() {
   }
 
   return (
-    // YENİ: Mobilde flex-col (alt alta), bilgisayarda flex-row (yan yana) dizilimi
     <div className="min-h-screen bg-secondary/20 flex flex-col md:flex-row">
       
-      {/* YENİ: SADECE MOBİLDE GÖRÜNEN ÜST MENÜ */}
+      {/* SADECE MOBİLDE GÖRÜNEN ÜST MENÜ */}
       <div className="md:hidden bg-card border-b border-border sticky top-0 z-50">
         <div className="flex items-center justify-between p-4">
           <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -91,7 +106,6 @@ export default function ProviderDashboard() {
           </Button>
         </div>
 
-        {/* MOBİL AÇILIR MENÜ İÇERİĞİ */}
         {mobileMenuOpen && (
           <div className="p-4 border-t border-border flex flex-col gap-2 bg-card absolute w-full shadow-xl z-40 left-0 top-[73px]">
             <Button variant={activeTab === "dashboard" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("dashboard")}>
@@ -103,9 +117,7 @@ export default function ProviderDashboard() {
             <Button variant={activeTab === "settings" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("settings")}>
               <Settings className="mr-2 h-4 w-4" /> Ayarlar
             </Button>
-            
             <div className="h-px bg-border my-2" />
-            
             <Button variant="ghost" asChild className="w-full justify-start text-muted-foreground hover:text-foreground">
               <a href="/"><Home className="mr-2 h-4 w-4" /> Ana Sayfaya Dön</a>
             </Button>
@@ -116,7 +128,7 @@ export default function ProviderDashboard() {
         )}
       </div>
 
-      {/* SADECE BİLGİSAYARDA GÖRÜNEN YAN MENÜ (Sidebar) */}
+      {/* SADECE BİLGİSAYARDA GÖRÜNEN YAN MENÜ */}
       <aside className="w-64 bg-card border-r border-border hidden md:flex flex-col h-screen sticky top-0">
         <div className="p-6 border-b border-border">
           <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -170,7 +182,6 @@ export default function ProviderDashboard() {
           )}
         </div>
 
-        {/* --- SEKME 1: DASHBOARD --- */}
         {activeTab === "dashboard" && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
@@ -179,27 +190,21 @@ export default function ProviderDashboard() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Toplam Aktivite</CardTitle>
                   <Package className="h-4 w-4 text-primary" />
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{activities.length}</div>
-                </CardContent>
+                <CardContent><div className="text-2xl font-bold">{activities.length}</div></CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Ortalama Puan</CardTitle>
                   <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{provider?.rating || 0}</div>
-                </CardContent>
+                <CardContent><div className="text-2xl font-bold">{provider?.rating || 0}</div></CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Toplam Yorum</CardTitle>
                   <TrendingUp className="h-4 w-4 text-green-500" />
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{provider?.review_count || 0}</div>
-                </CardContent>
+                <CardContent><div className="text-2xl font-bold">{provider?.review_count || 0}</div></CardContent>
               </Card>
             </div>
             
@@ -207,13 +212,12 @@ export default function ProviderDashboard() {
               <Info className="h-6 w-6 text-primary shrink-0 mt-1" />
               <div>
                 <h4 className="font-semibold text-sm md:text-base">İpucu: Daha fazla rezervasyon alın</h4>
-                <p className="text-xs md:text-sm text-muted-foreground mt-1 leading-relaxed">Aktivitelerinize yüksek kaliteli fotoğraflar eklemek ve açıklamaları detaylı tutmak müşteri dönüşümlerini %40'a kadar artırır. Aktivitelerim sekmesinden turlarınızı güncelleyebilirsiniz.</p>
+                <p className="text-xs md:text-sm text-muted-foreground mt-1 leading-relaxed">Aktivitelerinize yüksek kaliteli fotoğraflar eklemek ve açıklamaları detaylı tutmak müşteri dönüşümlerini %40'a kadar artırır.</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* --- SEKME 2: AKTİVİTELERİM --- */}
         {activeTab === "activities" && (
           <div className="grid grid-cols-1 gap-4">
             {activities.length > 0 ? (
@@ -232,8 +236,19 @@ export default function ProviderDashboard() {
                     </div>
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                    <Button variant="outline" size="sm" className="flex-1 sm:flex-none">Düzenle</Button>
-                    <Button variant="outline" size="sm" className="flex-1 sm:flex-none text-destructive hover:bg-destructive/10 border-destructive/20">Sil</Button>
+                    {/* YENİ: Düzenle Butonu (Linklendi) */}
+                    <Button variant="outline" size="sm" className="flex-1 sm:flex-none" asChild>
+                      <Link href={`/firma/panel/duzenle/${activity.id}`}>Düzenle</Link>
+                    </Button>
+                    {/* YENİ: Sil Butonu (Fonksiyona bağlandı) */}
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 sm:flex-none text-destructive hover:bg-destructive/10 border-destructive/20"
+                      onClick={() => handleDelete(activity.id)}
+                    >
+                      Sil
+                    </Button>
                   </div>
                 </div>
               ))
@@ -250,7 +265,6 @@ export default function ProviderDashboard() {
           </div>
         )}
 
-        {/* --- SEKME 3: AYARLAR --- */}
         {activeTab === "settings" && (
           <div className="max-w-2xl">
             <Card>
