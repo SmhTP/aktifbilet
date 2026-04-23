@@ -1,123 +1,156 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Building2, Lock, Mail, ArrowRight, Loader2 } from "lucide-react"
+import { MapPin, Loader2, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
 
 export default function ProviderLogin() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [errorMsg, setErrorMsg] = useState("")
+  const [rememberMe, setRememberMe] = useState(true)
+  
+  const [loading, setLoading] = useState(true) // Sayfa ilk açılış yüklemesi
+  const [loginLoading, setLoginLoading] = useState(false) // Butona basılma yüklemesi
+  const [error, setError] = useState<string | null>(null)
+
+  // AKILLI KONTROL: Sayfa açılır açılmaz oturum var mı diye bakıyoruz
+  useEffect(() => {
+    async function checkExistingSession() {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        // Eğer zaten giriş yapmışsa, formu hiç göstermeden direkt Panele fırlat!
+        router.push("/firma/panel")
+      } else {
+        // Giriş yapmamışsa formu göster
+        setLoading(false)
+      }
+    }
+    checkExistingSession()
+  }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-    setErrorMsg("")
+    setLoginLoading(true)
+    setError(null)
 
-    // Supabase Kimlik Doğrulama İsteği
+    // Supabase ile giriş yap
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
+      email,
+      password,
     })
 
     if (error) {
-      setErrorMsg("Giriş başarısız. E-posta veya şifre hatalı.")
-      setIsLoading(false)
-    } else {
-      // Giriş başarılıysa firma paneline yönlendir
-      router.push("/firma/panel")
+      setError("E-posta veya şifre hatalı. Lütfen tekrar deneyin.")
+      setLoginLoading(false)
+      return
     }
+
+    // Başarılı girişten sonra panele yönlendir
+    router.push("/firma/panel")
+  }
+
+  // Oturum kontrolü yapılırken beyaz ekran yerine şık bir yükleme simgesi
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-secondary/20">
+        <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Oturumunuz kontrol ediliyor...</p>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-secondary/30 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="h-12 w-12 bg-primary rounded-xl flex items-center justify-center">
-            <Building2 className="h-6 w-6 text-primary-foreground" />
-          </div>
+    <div className="min-h-screen flex flex-col justify-center items-center bg-secondary/20 p-4">
+      
+      <Link href="/" className="flex items-center gap-2 mb-8 hover:opacity-80 transition-opacity">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-lg">
+          <MapPin className="h-6 w-6 text-primary-foreground" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-foreground">
-          Firma Paneli Girişi
-        </h2>
-        <p className="mt-2 text-center text-sm text-muted-foreground">
-          Aktivitelerinizi ve rezervasyonlarınızı yönetmek için giriş yapın
-        </p>
-      </div>
+        <span className="text-3xl font-extrabold text-foreground tracking-tight">AktifBilet</span>
+      </Link>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-background py-8 px-4 shadow-xl sm:rounded-lg sm:px-10 border border-border">
-          <form className="space-y-6" onSubmit={handleLogin}>
+      <Card className="w-full max-w-md shadow-2xl border-border">
+        <CardHeader className="space-y-2 text-center pb-6">
+          <div className="mx-auto bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-2">
+            <Building2 className="h-8 w-8 text-primary" />
+          </div>
+          <CardTitle className="text-2xl font-bold">İş Ortağı Girişi</CardTitle>
+          <CardDescription className="text-base">
+            Firma panelinize erişmek için bilgilerinizi girin.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-5">
             
-            {/* Hata Mesajı Alanı */}
-            {errorMsg && (
-              <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-md p-3">
-                {errorMsg}
+            {error && (
+              <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-lg text-center border border-destructive/20">
+                {error}
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-foreground">
-                E-posta Adresi
-              </label>
-              <div className="mt-1 relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  placeholder="firma@ornek.com"
-                />
+            <div className="space-y-2">
+              <Label htmlFor="email">E-posta Adresi</Label>
+              <Input 
+                id="email" 
+                type="email" 
+                placeholder="firma@aktifbilet.com" 
+                required 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-12"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Şifre</Label>
+                <Link href="#" className="text-sm font-medium text-primary hover:underline">
+                  Şifremi Unuttum
+                </Link>
               </div>
+              <Input 
+                id="password" 
+                type="password" 
+                required 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-12"
+              />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground">
-                Şifre
-              </label>
-              <div className="mt-1 relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
-                  placeholder="••••••••"
-                />
-              </div>
+            {/* BENİ HATIRLA SEÇENEĞİ */}
+            <div className="flex items-center gap-2 pt-2">
+              <Checkbox 
+                id="remember" 
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+              />
+              <Label htmlFor="remember" className="text-sm cursor-pointer text-muted-foreground font-normal">
+                Beni Hatırla
+              </Label>
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Giriş Yapılıyor...
-                </>
-              ) : (
-                <>
-                  Giriş Yap
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </>
-              )}
+            <Button type="submit" className="w-full h-12 text-lg font-semibold mt-4 shadow-lg shadow-primary/20" disabled={loginLoading}>
+              {loginLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Giriş Yap"}
             </Button>
+            
           </form>
+        </CardContent>
+      </Card>
 
-          <div className="mt-6 text-center text-sm">
-            <Link href="/" className="text-muted-foreground hover:text-primary transition-colors">
-              &larr; Ana Sayfaya Dön
-            </Link>
-          </div>
-        </div>
-      </div>
+      <p className="mt-8 text-sm text-muted-foreground">
+        Henüz iş ortağımız değil misiniz? <Link href="/iletisim" className="text-primary font-medium hover:underline">Bizimle iletişime geçin.</Link>
+      </p>
+      
     </div>
   )
 }
