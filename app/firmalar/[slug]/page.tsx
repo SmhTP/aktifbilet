@@ -5,16 +5,7 @@ import { useParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import {
-  Star,
-  MapPin,
-  Phone,
-  Mail,
-  Globe,
-  Calendar,
-  BadgeCheck,
-  ChevronRight,
-  Clock,
-  Loader2,
+  Star, MapPin, Phone, Mail, Globe, Calendar, BadgeCheck, ChevronRight, Clock, Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,7 +23,6 @@ const categoryTranslationKeys: Record<string, string> = {
   "kultur-sanat": "category.culturalArt",
 }
 
-// Güvenli metin okuyucu (JSON veya düz metin çökmelerini engeller)
 const getText = (obj: any, locale: string, fallback = "") => {
   if (!obj) return fallback;
   if (typeof obj === 'string') return obj;
@@ -52,7 +42,6 @@ export default function ProviderDetailPage() {
     async function fetchProviderAndActivities() {
       if (!params.slug) return
 
-      // 1. Firmayı (Provider) slug üzerinden bul
       const { data: pData, error: pError } = await supabase
         .from("providers")
         .select("*")
@@ -62,7 +51,6 @@ export default function ProviderDetailPage() {
       if (pData) {
         setProvider(pData)
 
-        // 2. Bu firmaya ait tüm aktiviteleri çek
         const { data: aData } = await supabase
           .from("activities")
           .select("*")
@@ -118,10 +106,8 @@ export default function ProviderDetailPage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        {/* Firma Başlık Alanı */}
         <div className="flex flex-col md:flex-row gap-6 mb-8">
           <div className="relative h-32 w-32 shrink-0 rounded-2xl overflow-hidden bg-secondary border border-border flex items-center justify-center text-4xl font-bold text-primary">
-            {/* Logo yoksa isminin ilk harfini basıyoruz */}
             {provider.name[0]}
           </div>
           <div className="flex-1">
@@ -140,12 +126,12 @@ export default function ProviderDetailPage() {
               </div>
               <div className="flex items-center gap-1">
                 <MapPin className="h-5 w-5" />
-                {/* Şimdilik varsayılan bir konum atadık */}
                 <span>Türkiye</span>
               </div>
             </div>
-            <p className="mt-4 text-muted-foreground leading-relaxed max-w-2xl line-clamp-3">
-              {provider.name}, AktifBilet platformunda onaylı bir etkinlik sağlayıcısıdır. Misafirlerimize güvenilir ve unutulmaz deneyimler sunmak için buradayız.
+            {/* DÜZELTME 1: Gerçek açıklama veritabanından çekiliyor */}
+            <p className="mt-4 text-muted-foreground leading-relaxed max-w-2xl">
+              {provider.description || `${provider.name}, AktifBilet platformunda onaylı bir etkinlik sağlayıcısıdır. Misafirlerimize güvenilir ve unutulmaz deneyimler sunmak için buradayız.`}
             </p>
           </div>
         </div>
@@ -154,9 +140,7 @@ export default function ProviderDetailPage() {
           <div className="lg:col-span-2">
             <Tabs defaultValue="activities" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="activities">
-                  Aktiviteler ({activities.length})
-                </TabsTrigger>
+                <TabsTrigger value="activities">Aktiviteler ({activities.length})</TabsTrigger>
                 <TabsTrigger value="reviews">Değerlendirmeler (0)</TabsTrigger>
               </TabsList>
 
@@ -166,7 +150,7 @@ export default function ProviderDetailPage() {
                     activities.map((activity) => {
                       const activityName = getText(activity.name, currentLocale, "İsimsiz Aktivite");
                       const activityDesc = getText(activity.description, currentLocale, "");
-                      const activityCat = t(categoryTranslationKeys[activity.categorySlug]) || activity.categorySlug;
+                      const activityCat = t(categoryTranslationKeys[activity.categorySlug]) || activity.categorySlug || activity.category;
                       const duration = typeof activity.duration === 'string' ? activity.duration : getText(activity.duration, currentLocale, "");
 
                       return (
@@ -185,25 +169,18 @@ export default function ProviderDetailPage() {
                                 <div>
                                   <div className="flex items-start justify-between gap-4">
                                     <div>
-                                      <Link
-                                        href={`/aktiviteler/${activity.slug}`}
-                                        className="font-semibold text-lg text-foreground hover:text-primary transition-colors"
-                                      >
+                                      <Link href={`/aktiviteler/${activity.slug}`} className="font-semibold text-lg text-foreground hover:text-primary transition-colors">
                                         {activityName}
                                       </Link>
-                                      <Badge variant="secondary" className="ml-2 text-xs">
+                                      <Badge variant="secondary" className="ml-2 text-xs capitalize">
                                         {activityCat}
                                       </Badge>
                                     </div>
                                     <div className="text-right shrink-0">
-                                      <p className="text-xl font-bold text-primary">
-                                        {activity.price} TL
-                                      </p>
+                                      <p className="text-xl font-bold text-primary">{activity.price} TL</p>
                                     </div>
                                   </div>
-                                  <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
-                                    {activityDesc}
-                                  </p>
+                                  <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{activityDesc}</p>
                                   {duration && (
                                     <div className="mt-3 flex flex-wrap gap-2">
                                       <Badge variant="outline" className="text-xs">
@@ -215,14 +192,10 @@ export default function ProviderDetailPage() {
                                 </div>
                                 <div className="mt-4 flex gap-2">
                                   <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                                    <Link href={`/rezervasyon/${activity.slug}`}>
-                                      Rezervasyon Yap
-                                    </Link>
+                                    <Link href={`/rezervasyon/${activity.slug}`}>Rezervasyon Yap</Link>
                                   </Button>
                                   <Button asChild variant="outline" size="sm">
-                                    <Link href={`/aktiviteler/${activity.slug}`}>
-                                      Detayları İncele
-                                    </Link>
+                                    <Link href={`/aktiviteler/${activity.slug}`}>Detayları İncele</Link>
                                   </Button>
                                 </div>
                               </div>
@@ -260,8 +233,9 @@ export default function ProviderDetailPage() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">E-posta</p>
-                      <a href={`mailto:iletisim@${provider.slug}.com`} className="font-medium text-foreground hover:text-primary transition-colors">
-                        iletisim@{provider.slug}.com
+                      {/* DÜZELTME 2: Gerçek E-posta veritabanından çekiliyor */}
+                      <a href={`mailto:${provider.email || `iletisim@${provider.slug}.com`}`} className="font-medium text-foreground hover:text-primary transition-colors">
+                        {provider.email || `iletisim@${provider.slug}.com`}
                       </a>
                     </div>
                   </div>
