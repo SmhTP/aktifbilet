@@ -101,9 +101,9 @@ export default function UserLogin() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Şifre</Label>
-                <Link href="#" className="text-sm font-medium text-primary hover:underline">
-                  Şifremi Unuttum
-                </Link>
+                <Link href="/kullanici/sifremi-unuttum" className="text-sm font-medium text-primary hover:underline">
+  Şifremi Unuttum
+</Link>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
