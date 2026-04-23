@@ -1,373 +1,273 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Calendar, Clock, MapPin, Users, Star, ChevronRight } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Calendar, Clock, Users, MapPin, ChevronRight, Loader2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { RatingStars } from "@/components/rating-stars"
-import { activities, providers } from "@/lib/data"
-import { useI18n } from "@/lib/i18n"
+import { Badge } from "@/components/ui/badge"
+import { supabase } from "@/lib/supabase"
 
-const mockBookings = [
-  {
-    id: "1",
-    activityId: "1",
-    providerId: "1",
-    date: "2024-12-25",
-    time: "10:00",
-    participants: 4,
-    totalPrice: 1400,
-    status: "confirmed" as const,
-    createdAt: "2024-12-10",
-  },
-  {
-    id: "2",
-    activityId: "3",
-    providerId: "3",
-    date: "2024-12-28",
-    time: "09:00",
-    participants: 2,
-    totalPrice: 360,
-    status: "pending" as const,
-    createdAt: "2024-12-15",
-  },
-  {
-    id: "3",
-    activityId: "2",
-    providerId: "2",
-    date: "2024-11-20",
-    time: "14:00",
-    participants: 8,
-    totalPrice: 1600,
-    status: "completed" as const,
-    createdAt: "2024-11-10",
-    reviewed: false,
-  },
-  {
-    id: "4",
-    activityId: "4",
-    providerId: "4",
-    date: "2024-11-15",
-    time: "15:00",
-    participants: 2,
-    totalPrice: 640,
-    status: "completed" as const,
-    createdAt: "2024-11-05",
-    reviewed: true,
-  },
-  {
-    id: "5",
-    activityId: "7",
-    providerId: "5",
-    date: "2024-10-20",
-    time: "10:00",
-    participants: 3,
-    totalPrice: 750,
-    status: "cancelled" as const,
-    createdAt: "2024-10-10",
-  },
-]
+// İsmi güvenli okuma fonksiyonu
+const getActivityName = (nameObj: any) => {
+  if (!nameObj) return "İsimsiz Aktivite"
+  if (typeof nameObj === 'string') return nameObj
+  return nameObj.tr || "İsimsiz Aktivite"
+}
 
-export default function MyActivitiesPage() {
-  const { t, locale } = useI18n()
-  const currentLocale = locale as "tr" | "en" // TypeScript için locale tipini belirliyoruz
+export default function MyEventsPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [bookings, setBookings] = useState<any[]>([])
 
-  const [selectedTab, setSelectedTab] = useState("upcoming")
-  const [reviewRating, setReviewRating] = useState(0)
-  const [reviewText, setReviewText] = useState("")
+  useEffect(() => {
+    async function fetchBookings() {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        router.push("/kullanici/giris")
+        return
+      }
 
-  const statusConfig = {
-    pending: { label: t("myEvents.status.pending"), variant: "secondary" as const },
-    confirmed: { label: t("myEvents.status.confirmed"), variant: "default" as const },
-    completed: { label: t("myEvents.status.completed"), variant: "outline" as const },
-    cancelled: { label: t("myEvents.status.cancelled"), variant: "destructive" as const },
+      // Veritabanından kullanıcının biletlerini, aktivite ve firma detaylarıyla birlikte çek
+      const { data, error } = await supabase
+        .from("bookings")
+        .select(`
+          *,
+          activities (
+            slug, name, location, image,
+            providers (name)
+          )
+        `)
+        .eq("user_id", user.id)
+        .order("booking_date", { ascending: true })
+
+      if (data) setBookings(data)
+      setLoading(false)
+    }
+
+    fetchBookings()
+  }, [router])
+
+  // İptal Etme Fonksiyonu
+  const handleCancelBooking = async (bookingId: string) => {
+    const confirmCancel = confirm("Bu rezervasyonu iptal etmek istediğinize emin misiniz?")
+    if (!confirmCancel) return
+
+    const { error } = await supabase
+      .from("bookings")
+      .update({ status: "iptal" })
+      .eq("id", bookingId)
+
+    if (!error) {
+      // Ekrandaki listeyi anında güncelle
+      setBookings(bookings.map(b => b.id === bookingId ? { ...b, status: "iptal" } : b))
+      alert("Rezervasyonunuz iptal edildi.")
+    } else {
+      alert("İptal işlemi sırasında bir hata oluştu.")
+    }
   }
 
-  const upcomingBookings = mockBookings.filter(
-    (b) => b.status === "confirmed" || b.status === "pending"
-  )
-  const pastBookings = mockBookings.filter(
-    (b) => b.status === "completed" || b.status === "cancelled"
-  )
+  // Tarihleri kıyaslamak için bugünün tarihini al
+  const today = new Date().toISOString().split('T')[0]
 
-  const handleReviewSubmit = (bookingId: string) => {
-    console.log("Review submitted:", { bookingId, rating: reviewRating, text: reviewText })
-    setReviewRating(0)
-    setReviewText("")
-  }
+  // Biletleri yaklaşan ve geçmiş olarak ayır (iptal edilenleri geçmişe veya ayrı yere alabiliriz, şimdilik statüye göre ayırıyoruz)
+  const upcomingBookings = bookings.filter(b => b.booking_date >= today && b.status !== 'iptal' && b.status !== 'tamamlandi')
+  const pastBookings = bookings.filter(b => b.booking_date < today || b.status === 'iptal' || b.status === 'tamamlandi')
 
-  // Fonksiyonu yeni dinamik yapıya güncelledik
-  const getActivityName = (activity: typeof activities[0]) => {
-    return activity.name[currentLocale]
-  }
+  // İstatistikler
+  const totalCount = bookings.length
+  const upcomingCount = upcomingBookings.length
+  const completedCount = bookings.filter(b => b.status === 'tamamlandi' || (b.booking_date < today && b.status !== 'iptal')).length
+  const reviewedCount = 0 // İleride yorum sistemi gelince burası dolacak
 
-  const BookingCard = ({ booking }: { booking: (typeof mockBookings)[0] }) => {
-    const activity = activities.find((a) => a.id === booking.activityId)
-    const provider = providers.find((p) => p.id === booking.providerId)
-    const status = statusConfig[booking.status]
-
-    if (!activity || !provider) return null
-
+  if (loading) {
     return (
-      <Card className="overflow-hidden">
-        <div className="flex flex-col sm:flex-row">
-          <div className="relative w-full sm:w-48 h-40 shrink-0">
-            <Image
-              src={activity.image}
-              alt={getActivityName(activity)}
-              fill
-              className="object-cover"
-            />
-            <div className="absolute top-2 left-2">
-              <Badge variant={status.variant}>{status.label}</Badge>
-            </div>
-          </div>
-          <CardContent className="flex-1 p-4">
-            <div className="flex flex-col h-full justify-between">
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <Link
-                      href={`/aktiviteler/${activity.slug}`}
-                      className="font-semibold text-lg text-foreground hover:text-primary transition-colors"
-                    >
-                      {getActivityName(activity)}
-                    </Link>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      <Link
-                        href={`/firmalar/${provider.slug}`}
-                        className="hover:text-primary transition-colors"
-                      >
-                        {provider.name}
-                      </Link>
-                    </p>
-                  </div>
-                  <p className="text-xl font-bold text-primary shrink-0">{booking.totalPrice} TL</p>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-4 w-4" />
-                    <span>{new Date(booking.date).toLocaleDateString(currentLocale === "en" ? "en-US" : "tr-TR", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric"
-                    })}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    <span>{booking.time}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    <span>{booking.participants} {t("common.person")}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    {/* activity.location objesi currentLocale ile güncellendi */}
-                    <span>{activity.location[currentLocale]}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {booking.status === "confirmed" && (
-                  <>
-                    <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                      <Link href={`/rezervasyon/${booking.id}`}>{t("myEvents.viewDetails")}</Link>
-                    </Button>
-                    <Button variant="outline" size="sm" className="text-destructive border-destructive hover:bg-destructive/10">
-                      {t("myEvents.cancelBooking")}
-                    </Button>
-                  </>
-                )}
-                {booking.status === "pending" && (
-                  <Button variant="outline" size="sm" className="text-destructive border-destructive hover:bg-destructive/10">
-                    {t("myEvents.cancelBooking")}
-                  </Button>
-                )}
-                {booking.status === "completed" && !("reviewed" in booking && booking.reviewed) && (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90">
-                        <Star className="mr-2 h-4 w-4" />
-                        {t("myEvents.rate")}
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t("myEvents.rateExperience")}</DialogTitle>
-                        <DialogDescription>
-                          {getActivityName(activity)} - {provider.name}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="flex flex-col items-center gap-2">
-                          <p className="text-sm text-muted-foreground">{t("myEvents.yourRating")}</p>
-                          <RatingStars
-                            rating={reviewRating}
-                            size="lg"
-                            interactive
-                            onRatingChange={setReviewRating}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-foreground">
-                            {t("myEvents.yourComment")}
-                          </label>
-                          <Textarea
-                            placeholder={t("myEvents.shareExperience")}
-                            value={reviewText}
-                            onChange={(e) => setReviewText(e.target.value)}
-                            rows={4}
-                          />
-                        </div>
-                        <Button
-                          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                          disabled={reviewRating === 0}
-                          onClick={() => handleReviewSubmit(booking.id)}
-                        >
-                          {t("myEvents.submitReview")}
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
-                {booking.status === "completed" && "reviewed" in booking && booking.reviewed && (
-                  <Badge variant="secondary" className="text-xs">
-                    <Star className="mr-1 h-3 w-3" />
-                    {t("myEvents.rated")}
-                  </Badge>
-                )}
-                <Button asChild variant="ghost" size="sm">
-                  <Link href={`/aktiviteler/${activity.slug}`}>
-                    {t("myEvents.bookAgain")}
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </div>
-      </Card>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="animate-spin h-10 w-10 text-primary" />
+      </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="bg-primary/5 border-b border-border">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-          <h1 className="text-3xl font-bold text-foreground">{t("myEvents.header")}</h1>
-          <p className="mt-2 text-muted-foreground">{t("myEvents.headerDesc")}</p>
+    <div className="min-h-screen bg-background/50">
+      <div className="bg-primary/5 border-b border-border py-8">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <h1 className="text-3xl font-bold text-foreground">Etkinliklerim</h1>
+          <p className="mt-2 text-muted-foreground">Tüm rezervasyonlarınızı ve geçmiş etkinliklerinizi görüntüleyin</p>
         </div>
       </div>
 
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* İSTATİSTİKLER (Senin harika tasarımın) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-primary">{mockBookings.length}</p>
-                <p className="text-sm text-muted-foreground">{t("myEvents.total")}</p>
-              </div>
+          <Card className="shadow-sm">
+            <CardContent className="p-6 text-center">
+              <p className="text-3xl font-bold text-primary">{totalCount}</p>
+              <p className="text-sm font-medium text-muted-foreground mt-1">Toplam</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-primary">{upcomingBookings.length}</p>
-                <p className="text-sm text-muted-foreground">{t("myEvents.upcoming2")}</p>
-              </div>
+          <Card className="shadow-sm">
+            <CardContent className="p-6 text-center">
+              <p className="text-3xl font-bold text-primary">{upcomingCount}</p>
+              <p className="text-sm font-medium text-muted-foreground mt-1">Yaklaşan</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-primary">
-                  {mockBookings.filter((b) => b.status === "completed").length}
-                </p>
-                <p className="text-sm text-muted-foreground">{t("myEvents.completed")}</p>
-              </div>
+          <Card className="shadow-sm">
+            <CardContent className="p-6 text-center">
+              <p className="text-3xl font-bold text-primary">{completedCount}</p>
+              <p className="text-sm font-medium text-muted-foreground mt-1">Tamamlanan</p>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-primary">
-                  {mockBookings.filter((b) => b.status === "completed" && "reviewed" in b && b.reviewed).length}
-                </p>
-                <p className="text-sm text-muted-foreground">{t("myEvents.evaluated")}</p>
-              </div>
+          <Card className="shadow-sm">
+            <CardContent className="p-6 text-center">
+              <p className="text-3xl font-bold text-primary">{reviewedCount}</p>
+              <p className="text-sm font-medium text-muted-foreground mt-1">Değerlendirilen</p>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="upcoming">
-              {t("myEvents.upcomingEvents")} ({upcomingBookings.length})
-            </TabsTrigger>
-            <TabsTrigger value="past">
-              {t("myEvents.pastEvents")} ({pastBookings.length})
-            </TabsTrigger>
+        <Tabs defaultValue="upcoming" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-6 h-12">
+            <TabsTrigger value="upcoming" className="text-base">Yaklaşan Etkinlikler ({upcomingCount})</TabsTrigger>
+            <TabsTrigger value="past" className="text-base">Geçmiş Etkinlikler ({pastBookings.length})</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="upcoming" className="mt-6">
+          {/* YAKLAŞAN ETKİNLİKLER */}
+          <TabsContent value="upcoming" className="space-y-6">
             {upcomingBookings.length > 0 ? (
-              <div className="space-y-4">
-                {upcomingBookings.map((booking) => (
-                  <BookingCard key={booking.id} booking={booking} />
-                ))}
-              </div>
+              upcomingBookings.map((booking) => (
+                <BookingCard 
+                  key={booking.id} 
+                  booking={booking} 
+                  onCancel={() => handleCancelBooking(booking.id)} 
+                  isPast={false} 
+                />
+              ))
             ) : (
-              <div className="text-center py-12">
-                <Calendar className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-medium text-foreground">
-                  {t("myEvents.noUpcomingEvents")}
-                </h3>
-                <p className="mt-2 text-muted-foreground">{t("myEvents.newAdventure")}</p>
-                <Button asChild className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">
-                  <Link href="/aktiviteler">{t("myEvents.discoverActivities")}</Link>
+              <div className="text-center py-16 bg-card border border-dashed border-border rounded-xl">
+                <Calendar className="h-12 w-12 text-muted-foreground opacity-50 mx-auto mb-4" />
+                <h3 className="text-lg font-medium">Yaklaşan Etkinliğiniz Yok</h3>
+                <p className="text-muted-foreground mt-2 mb-6">Hemen yeni bir macera keşfedin ve rezervasyon yapın!</p>
+                <Button asChild>
+                  <Link href="/aktiviteler">Aktiviteleri Keşfet</Link>
                 </Button>
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="past" className="mt-6">
+          {/* GEÇMİŞ / İPTAL EDİLEN ETKİNLİKLER */}
+          <TabsContent value="past" className="space-y-6">
             {pastBookings.length > 0 ? (
-              <div className="space-y-4">
-                {pastBookings.map((booking) => (
-                  <BookingCard key={booking.id} booking={booking} />
-                ))}
-              </div>
+              pastBookings.map((booking) => (
+                <BookingCard 
+                  key={booking.id} 
+                  booking={booking} 
+                  isPast={true} 
+                />
+              ))
             ) : (
-              <div className="text-center py-12">
-                <Clock className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-medium text-foreground">
-                  {t("myEvents.noPastEvents")}
-                </h3>
-                <p className="mt-2 text-muted-foreground">{t("myEvents.bookFirstActivity")}</p>
-                <Button asChild className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">
-                  <Link href="/aktiviteler">{t("myEvents.discoverActivities")}</Link>
-                </Button>
+              <div className="text-center py-16 bg-card border border-dashed border-border rounded-xl">
+                <p className="text-muted-foreground">Henüz geçmiş bir etkinliğiniz bulunmuyor.</p>
               </div>
             )}
           </TabsContent>
         </Tabs>
       </div>
     </div>
+  )
+}
+
+// Bilet Kartı Komponenti (Temiz kod için ayırdık)
+function BookingCard({ booking, onCancel, isPast }: { booking: any, onCancel?: () => void, isPast: boolean }) {
+  const activity = booking.activities
+  const name = getActivityName(activity?.name)
+  const location = getActivityName(activity?.location)
+  const providerName = activity?.providers?.name || "Bilinmeyen Firma"
+
+  // Duruma göre Badge rengi belirleme
+  let badgeColor = "bg-primary text-primary-foreground"
+  let statusText = "Onaylandı"
+  
+  if (booking.status === "bekliyor") { badgeColor = "bg-yellow-500 text-white"; statusText = "Onay Bekliyor" }
+  if (booking.status === "iptal") { badgeColor = "bg-destructive text-destructive-foreground"; statusText = "İptal Edildi" }
+  if (booking.status === "tamamlandi") { badgeColor = "bg-secondary text-secondary-foreground"; statusText = "Tamamlandı" }
+
+  return (
+    <Card className="overflow-hidden hover:shadow-md transition-shadow">
+      <div className="flex flex-col sm:flex-row">
+        {/* Sol Taraf: Fotoğraf ve Badge */}
+        <div className="relative w-full sm:w-72 h-48 sm:h-auto shrink-0 bg-secondary">
+          <Image 
+            src={activity?.image || "/placeholder.jpg"} 
+            alt={name} 
+            fill 
+            className={`object-cover ${booking.status === 'iptal' ? 'grayscale opacity-70' : ''}`}
+          />
+          <Badge className={`absolute top-3 left-3 ${badgeColor} border-none`}>
+            {statusText}
+          </Badge>
+        </div>
+        
+        {/* Sağ Taraf: İçerik */}
+        <CardContent className="flex-1 p-5 sm:p-6 flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-foreground">{name}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{providerName}</p>
+              </div>
+              <p className="text-xl font-bold text-primary shrink-0">{booking.total_price} TL</p>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4 shrink-0 text-foreground/70" />
+                <span>{new Date(booking.booking_date).toLocaleDateString("tr-TR")}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4 shrink-0 text-foreground/70" />
+                <span>{booking.booking_time || "Belirtilmemiş"}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Users className="h-4 w-4 shrink-0 text-foreground/70" />
+                <span>{booking.guest_count} Kişi</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground line-clamp-1">
+                <MapPin className="h-4 w-4 shrink-0 text-foreground/70" />
+                <span className="truncate" title={location}>{location}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Aksiyon Butonları */}
+          <div className="flex items-center gap-3 mt-6 pt-4 border-t border-border">
+            {activity?.slug && (
+              <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Link href={`/aktiviteler/${activity.slug}`}>Detayları Gör</Link>
+              </Button>
+            )}
+            
+            {/* Eğer etkinlik yaklaşansa ve iptal edilmemişse İptal Butonunu göster */}
+            {!isPast && booking.status !== 'iptal' && onCancel && (
+              <Button variant="outline" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onCancel}>
+                <XCircle className="h-4 w-4 mr-2" /> İptal Et
+              </Button>
+            )}
+
+            {/* İptal edilen veya geçmiş etkinlikler için tekrar rezervasyon linki */}
+            {isPast && activity?.slug && (
+              <Link href={`/rezervasyon/${activity.slug}`} className="text-sm font-medium text-foreground hover:text-primary flex items-center gap-1 transition-colors ml-2">
+                Tekrar Rezervasyon Yap <ChevronRight className="h-4 w-4" />
+              </Link>
+            )}
+          </div>
+        </CardContent>
+      </div>
+    </Card>
   )
 }
