@@ -5,8 +5,8 @@ import { useParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import {
-  Star, MapPin, Phone, Mail, Globe, Calendar, BadgeCheck, ChevronRight, Clock, Loader2,
-} from "lucide-react"
+  Star, MapPin, Mail, Calendar, BadgeCheck, ChevronRight, Clock, Loader2,
+} from "lucide-react" // Globe ikonu çıkarıldı
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -129,7 +129,6 @@ export default function ProviderDetailPage() {
                 <span>Türkiye</span>
               </div>
             </div>
-            {/* DÜZELTME 1: Gerçek açıklama veritabanından çekiliyor */}
             <p className="mt-4 text-muted-foreground leading-relaxed max-w-2xl">
               {provider.description || `${provider.name}, AktifBilet platformunda onaylı bir etkinlik sağlayıcısıdır. Misafirlerimize güvenilir ve unutulmaz deneyimler sunmak için buradayız.`}
             </p>
@@ -233,23 +232,12 @@ export default function ProviderDetailPage() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">E-posta</p>
-                      {/* DÜZELTME 2: Gerçek E-posta veritabanından çekiliyor */}
                       <a href={`mailto:${provider.email || `iletisim@${provider.slug}.com`}`} className="font-medium text-foreground hover:text-primary transition-colors">
                         {provider.email || `iletisim@${provider.slug}.com`}
                       </a>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <Globe className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Web Sitesi</p>
-                      <a href={`https://www.${provider.slug}.com`} target="_blank" rel="noopener noreferrer" className="font-medium text-foreground hover:text-primary transition-colors">
-                        www.{provider.slug}.com
-                      </a>
-                    </div>
-                  </div>
+                  {/* Web Sitesi Bölümü Tamamen Kaldırıldı */}
                 </CardContent>
               </Card>
 
