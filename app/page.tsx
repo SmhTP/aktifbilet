@@ -102,12 +102,13 @@ export default function HomePage() {
           </div>
 
           <div className="mt-8 flex justify-center max-w-2xl mx-auto">
-            <Link href="/kullanici/giris">
-              <Button variant="outline" className="h-12 bg-background/20 hover:bg-background/40 border-white/30 text-white backdrop-blur-sm transition-all px-8">
+            {/* Button'a asChild eklendi ve Link içeri alındı */}
+            <Button asChild variant="outline" className="h-12 bg-background/20 hover:bg-background/40 border-white/30 text-white backdrop-blur-sm transition-all px-8">
+              <Link href="/kullanici/giris">
                 <User className="mr-2 h-4 w-4" />
                 Kullanıcı Girişi Yap
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
 
           <div className="mt-12 flex flex-wrap justify-center gap-8">
