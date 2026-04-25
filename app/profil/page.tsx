@@ -136,11 +136,10 @@ export default function ProfilePage() {
     setIsUpdatingPassword(false)
   }
 
-  // ÇIKIŞ YAP
+  // ÇIKIŞ YAP (DÜZELTİLDİ: window.location kullanıldı)
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push("/")
-    router.refresh()
+    window.location.href = "/"
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin h-10 w-10 text-primary" /></div>

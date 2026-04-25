@@ -120,7 +120,7 @@ export default function BookingPage({ params }: PageProps) {
         booking_time: selectedTime,
         guest_count: participants,
         total_price: totalPrice,
-        status: "onaylandi" 
+        status: "bekliyor" // DÜZELTİLDİ: Bilet artık onaylı değil, bekliyor statüsünde düşecek
       })
 
     if (error) {
