@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { MapPin, Loader2, Building2 } from "lucide-react"
+import { MapPin, Loader2, Building2, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -147,9 +147,19 @@ export default function ProviderLogin() {
         </CardContent>
       </Card>
 
-      <p className="mt-8 text-sm text-muted-foreground">
-        Henüz iş ortağımız değil misiniz? <Link href="/iletisim" className="text-primary font-medium hover:underline">Bizimle iletişime geçin.</Link>
-      </p>
+      <div className="mt-8 flex flex-col items-center space-y-4">
+        <p className="text-sm text-muted-foreground text-center">
+          Henüz iş ortağımız değil misiniz? <Link href="/iletisim" className="text-primary font-medium hover:underline">Bizimle iletişime geçin.</Link>
+        </p>
+        
+        {/* YENİ EKLENEN: Müşteri Girişine Dönüş Butonu */}
+        <Button asChild variant="ghost" className="text-muted-foreground hover:text-foreground">
+          <Link href="/kullanici/giris" className="flex items-center gap-2">
+            <User className="h-4 w-4" />
+            Bireysel Müşteri Girişine Dön
+          </Link>
+        </Button>
+      </div>
       
     </div>
   )
