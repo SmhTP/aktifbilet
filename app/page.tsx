@@ -47,7 +47,24 @@ export default function HomePage() {
     async function fetchData() {
       // 1. Kullanıcı oturumunu kontrol et
       const { data: authData } = await supabase.auth.getUser()
-      if (authData?.user) setUser(authData.user)
+      
+      if (authData?.user) {
+        // KONTROL: Bu giren kişi firma yetkilisi mi?
+        const { data: providerData } = await supabase
+          .from("providers")
+          .select("id")
+          .eq("user_id", authData.user.id)
+          .single()
+
+        if (providerData) {
+          // Eğer firmaysa, ana sayfayı görmesine izin verme, direkt panele fırlat!
+          window.location.href = "/firma/panel"
+          return
+        }
+        
+        // Firma değilse normal kullanıcı olarak set et
+        setUser(authData.user)
+      }
 
       // 2. Aktiviteleri çek
       const { data: actData } = await supabase
