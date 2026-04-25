@@ -4,11 +4,12 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { 
-  Plus, LayoutDashboard, Package, Settings, LogOut, Loader2, Star, TrendingUp, MapPin, Home, Info, Menu, X, Save
+  Plus, LayoutDashboard, Package, Settings, LogOut, Loader2, Star, TrendingUp, MapPin, Home, Info, Menu, X, Save, CalendarCheck, CheckCircle2, XCircle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 
 export default function ProviderDashboard() {
@@ -16,11 +17,12 @@ export default function ProviderDashboard() {
   const [loading, setLoading] = useState(true)
   const [provider, setProvider] = useState<any>(null)
   const [activities, setActivities] = useState<any[]>([])
+  const [bookings, setBookings] = useState<any[]>([]) // YENİ: Rezervasyonlar State'i
   
   const [activeTab, setActiveTab] = useState("dashboard")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  // YENİ: Ayarlar sekmesi için state'ler
+  // Ayarlar sekmesi için state'ler
   const [settingsDesc, setSettingsDesc] = useState("")
   const [settingsEmail, setSettingsEmail] = useState("")
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false)
@@ -42,16 +44,36 @@ export default function ProviderDashboard() {
 
       if (providerData) {
         setProvider(providerData)
-        // Veritabanından gelen bilgileri ayarlar formuna dolduruyoruz
         setSettingsDesc(providerData.description || "")
         setSettingsEmail(providerData.email || `iletisim@${providerData.slug}.com`)
 
+        // 1. Firmanın aktivitelerini çek
         const { data: activityData } = await supabase
           .from("activities")
           .select("*")
           .eq("provider_id", providerData.id)
         
-        if (activityData) setActivities(activityData)
+        if (activityData) {
+          setActivities(activityData)
+
+          // 2. YENİ: Firmanın aktivitelerine ait rezervasyonları çek
+          // Supabase'de 'bookings' tablosu 'activities' ile ilişkili. 
+          // Bu yüzden bu firmanın sahip olduğu aktivite ID'lerine denk gelen biletleri çekiyoruz.
+          if (activityData.length > 0) {
+            const activityIds = activityData.map(a => a.id)
+            const { data: bookingData } = await supabase
+              .from("bookings")
+              .select(`
+                *,
+                activities(name),
+                auth:user_id(email)
+              `)
+              .in("activity_id", activityIds)
+              .order("booking_date", { ascending: false }) // En yeniler en üstte
+            
+            if (bookingData) setBookings(bookingData)
+          }
+        }
       }
       
       setLoading(false)
@@ -69,10 +91,7 @@ export default function ProviderDashboard() {
     const confirmDelete = confirm("Bu aktiviteyi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")
     if (!confirmDelete) return
 
-    const { error } = await supabase
-      .from("activities")
-      .delete()
-      .eq("id", id)
+    const { error } = await supabase.from("activities").delete().eq("id", id)
 
     if (error) {
       alert("Silme işlemi sırasında bir hata oluştu.")
@@ -82,21 +101,32 @@ export default function ProviderDashboard() {
     }
   }
 
+  // YENİ: Rezervasyon Durumu Güncelleme
+  const updateBookingStatus = async (bookingId: string, newStatus: string) => {
+    const { error } = await supabase
+      .from("bookings")
+      .update({ status: newStatus })
+      .eq("id", bookingId)
+
+    if (!error) {
+      // Ekrandaki listeyi anında güncelle
+      setBookings(bookings.map(b => b.id === bookingId ? { ...b, status: newStatus } : b))
+    } else {
+      alert("Durum güncellenirken hata oluştu.")
+    }
+  }
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     setMobileMenuOpen(false)
   }
 
-  // YENİ: Ayarları Güncelleme Fonksiyonu
   const handleUpdateSettings = async () => {
     setIsUpdatingSettings(true)
 
     const { error } = await supabase
       .from("providers")
-      .update({
-        description: settingsDesc,
-        email: settingsEmail
-      })
+      .update({ description: settingsDesc, email: settingsEmail })
       .eq("id", provider.id)
 
     if (error) {
@@ -104,10 +134,8 @@ export default function ProviderDashboard() {
       console.error(error)
     } else {
       alert("Firma profiliniz başarıyla güncellendi!")
-      // Ekranda görünen genel provider state'ini de güncelleyelim
       setProvider({ ...provider, description: settingsDesc, email: settingsEmail })
     }
-
     setIsUpdatingSettings(false)
   }
 
@@ -119,10 +147,13 @@ export default function ProviderDashboard() {
     )
   }
 
+  // Aktif (İptal edilmemiş) rezervasyonlardan elde edilen toplam ciro
+  const totalRevenue = bookings.filter(b => b.status !== 'iptal').reduce((sum, b) => sum + b.total_price, 0)
+
   return (
     <div className="min-h-screen bg-secondary/20 flex flex-col md:flex-row">
       
-      {/* SADECE MOBİLDE GÖRÜNEN ÜST MENÜ */}
+      {/* MOBİL ÜST MENÜ */}
       <div className="md:hidden bg-card border-b border-border sticky top-0 z-50">
         <div className="flex items-center justify-between p-4">
           <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -141,6 +172,9 @@ export default function ProviderDashboard() {
             <Button variant={activeTab === "dashboard" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("dashboard")}>
               <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
             </Button>
+            <Button variant={activeTab === "bookings" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("bookings")}>
+              <CalendarCheck className="mr-2 h-4 w-4" /> Rezervasyonlar
+            </Button>
             <Button variant={activeTab === "activities" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("activities")}>
               <Package className="mr-2 h-4 w-4" /> Aktivitelerim
             </Button>
@@ -158,7 +192,7 @@ export default function ProviderDashboard() {
         )}
       </div>
 
-      {/* SADECE BİLGİSAYARDA GÖRÜNEN YAN MENÜ */}
+      {/* BİLGİSAYAR YAN MENÜ */}
       <aside className="w-64 bg-card border-r border-border hidden md:flex flex-col h-screen sticky top-0">
         <div className="p-6 border-b border-border">
           <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -173,6 +207,13 @@ export default function ProviderDashboard() {
         <nav className="flex-1 p-4 space-y-2">
           <Button variant={activeTab === "dashboard" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("dashboard")}>
             <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
+          </Button>
+          {/* YENİ SEKME */}
+          <Button variant={activeTab === "bookings" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("bookings")}>
+            <CalendarCheck className="mr-2 h-4 w-4" /> Rezervasyonlar
+            {bookings.filter(b => b.status === 'onaylandi').length > 0 && (
+              <Badge className="ml-auto bg-primary text-primary-foreground">{bookings.filter(b => b.status === 'onaylandi').length}</Badge>
+            )}
           </Button>
           <Button variant={activeTab === "activities" ? "secondary" : "ghost"} className="w-full justify-start" onClick={() => handleTabChange("activities")}>
             <Package className="mr-2 h-4 w-4" /> Aktivitelerim
@@ -199,6 +240,7 @@ export default function ProviderDashboard() {
             <h2 className="text-2xl md:text-3xl font-bold text-foreground">Hoş Geldin, {provider?.name}</h2>
             <p className="text-sm md:text-base text-muted-foreground mt-1">
               {activeTab === "dashboard" && "İşletmenizin bugünkü durumuna göz atın."}
+              {activeTab === "bookings" && "Gelen rezervasyonları yönetin ve onaylayın."}
               {activeTab === "activities" && "Platformda listelenen turlarınızı yönetin."}
               {activeTab === "settings" && "Firma bilgilerinizi ve profilinizi güncelleyin."}
             </p>
@@ -214,40 +256,123 @@ export default function ProviderDashboard() {
 
         {activeTab === "dashboard" && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+              {/* Ciro Kartı Eklendi */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Toplam Aktivite</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Toplam Ciro</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-green-500" />
+                </CardHeader>
+                <CardContent><div className="text-2xl font-bold">{totalRevenue} TL</div></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Toplam Bilet</CardTitle>
+                  <CalendarCheck className="h-4 w-4 text-blue-500" />
+                </CardHeader>
+                <CardContent><div className="text-2xl font-bold">{bookings.length}</div></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Aktif Turlar</CardTitle>
                   <Package className="h-4 w-4 text-primary" />
                 </CardHeader>
                 <CardContent><div className="text-2xl font-bold">{activities.length}</div></CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Ortalama Puan</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Değerlendirme</CardTitle>
                   <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
                 </CardHeader>
                 <CardContent><div className="text-2xl font-bold">{provider?.rating || 0}</div></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Toplam Yorum</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-green-500" />
-                </CardHeader>
-                <CardContent><div className="text-2xl font-bold">{provider?.review_count || 0}</div></CardContent>
               </Card>
             </div>
             
             <div className="bg-card p-4 md:p-6 rounded-xl border border-border flex items-start gap-4">
               <Info className="h-6 w-6 text-primary shrink-0 mt-1" />
               <div>
-                <h4 className="font-semibold text-sm md:text-base">İpucu: Daha fazla rezervasyon alın</h4>
-                <p className="text-xs md:text-sm text-muted-foreground mt-1 leading-relaxed">Aktivitelerinize yüksek kaliteli fotoğraflar eklemek ve açıklamaları detaylı tutmak müşteri dönüşümlerini %40'a kadar artırır.</p>
+                <h4 className="font-semibold text-sm md:text-base">İpucu: Rezervasyonları hızla onaylayın</h4>
+                <p className="text-xs md:text-sm text-muted-foreground mt-1 leading-relaxed">Sol menüdeki "Rezervasyonlar" sekmesinden gelen biletleri takip edebilir, etkinlik tamamlandığında durumlarını güncelleyebilirsiniz.</p>
               </div>
             </div>
           </div>
         )}
 
+        {/* --- YENİ EKLENEN REZERVASYONLAR SEKMESİ --- */}
+        {activeTab === "bookings" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Tüm Rezervasyonlar</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {bookings.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-muted-foreground uppercase bg-secondary/50 border-b border-border">
+                      <tr>
+                        <th className="px-4 py-3 rounded-tl-lg">Tarih</th>
+                        <th className="px-4 py-3">Aktivite</th>
+                        <th className="px-4 py-3">Müşteri Email</th>
+                        <th className="px-4 py-3 text-center">Kişi</th>
+                        <th className="px-4 py-3 text-right">Tutar</th>
+                        <th className="px-4 py-3 text-center">Durum</th>
+                        <th className="px-4 py-3 rounded-tr-lg text-right">İşlem</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bookings.map((booking) => {
+                        let badgeColor = "bg-primary"
+                        if (booking.status === "iptal") badgeColor = "bg-destructive"
+                        if (booking.status === "tamamlandi") badgeColor = "bg-secondary text-secondary-foreground"
+                        
+                        return (
+                          <tr key={booking.id} className="border-b border-border hover:bg-secondary/20 transition-colors">
+                            <td className="px-4 py-3 font-medium whitespace-nowrap">
+                              {new Date(booking.booking_date).toLocaleDateString("tr-TR")} <br/>
+                              <span className="text-muted-foreground text-xs">{booking.booking_time}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {/* Aktivite adı JSON olarak geliyorsa tr'sini al, değilse kendisini al */}
+                              {typeof booking.activities?.name === 'string' 
+                                ? booking.activities.name 
+                                : booking.activities?.name?.tr || "Aktivite"}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">{booking.auth?.email || "Bilinmiyor"}</td>
+                            <td className="px-4 py-3 text-center font-bold">{booking.guest_count}</td>
+                            <td className="px-4 py-3 text-right font-bold text-primary">{booking.total_price} TL</td>
+                            <td className="px-4 py-3 text-center">
+                              <Badge className={`${badgeColor} border-none`}>{booking.status}</Badge>
+                            </td>
+                            <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                              {booking.status === "onaylandi" && (
+                                <>
+                                  <Button size="sm" variant="outline" className="text-green-500 hover:text-green-600 hover:bg-green-500/10" onClick={() => updateBookingStatus(booking.id, "tamamlandi")}>
+                                    <CheckCircle2 className="h-4 w-4 mr-1" /> Tamamla
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => updateBookingStatus(booking.id, "iptal")}>
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <CalendarCheck className="h-12 w-12 text-muted-foreground opacity-50 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-foreground">Henüz rezervasyon yok</h3>
+                  <p className="text-muted-foreground mt-1">Aktivitelerinize bilet satıldığında burada listelenecektir.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* AKTİVİTELER */}
         {activeTab === "activities" && (
           <div className="grid grid-cols-1 gap-4">
             {activities.length > 0 ? (
@@ -270,8 +395,7 @@ export default function ProviderDashboard() {
                       <Link href={`/firma/panel/duzenle/${activity.id}`}>Düzenle</Link>
                     </Button>
                     <Button 
-                      variant="outline" 
-                      size="sm" 
+                      variant="outline" size="sm" 
                       className="flex-1 sm:flex-none text-destructive hover:bg-destructive/10 border-destructive/20"
                       onClick={() => handleDelete(activity.id)}
                     >
@@ -285,15 +409,13 @@ export default function ProviderDashboard() {
                 <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <h3 className="text-lg font-medium text-foreground mb-2">Henüz Aktivite Yok</h3>
                 <p className="text-sm text-muted-foreground mb-4">Müşterilere sunmak için ilk turunuzu hemen oluşturun.</p>
-                <Button asChild>
-                  <Link href="/firma/panel/yeni">Aktivite Ekle</Link>
-                </Button>
+                <Button asChild><Link href="/firma/panel/yeni">Aktivite Ekle</Link></Button>
               </div>
             )}
           </div>
         )}
 
-        {/* --- YENİLENEN AYARLAR SEKMESİ --- */}
+        {/* AYARLAR */}
         {activeTab === "settings" && (
           <div className="max-w-2xl">
             <Card>
@@ -308,15 +430,10 @@ export default function ProviderDashboard() {
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">İletişim E-postası</label>
-                  {/* YENİ: State'e bağlandı */}
-                  <Input 
-                    value={settingsEmail} 
-                    onChange={(e) => setSettingsEmail(e.target.value)} 
-                  />
+                  <Input value={settingsEmail} onChange={(e) => setSettingsEmail(e.target.value)} />
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">Hakkımızda (Kısa Açıklama)</label>
-                  {/* YENİ: State'e bağlandı */}
                   <textarea 
                     className="w-full min-h-[100px] p-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     value={settingsDesc}
@@ -324,17 +441,8 @@ export default function ProviderDashboard() {
                     placeholder="Firmanızı müşterilere tanıtın..."
                   />
                 </div>
-                {/* YENİ: Fonksiyona bağlandı ve Loading eklendi */}
-                <Button 
-                  className="w-full h-11" 
-                  onClick={handleUpdateSettings} 
-                  disabled={isUpdatingSettings}
-                >
-                  {isUpdatingSettings ? (
-                    <Loader2 className="animate-spin mr-2 h-4 w-4" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
+                <Button className="w-full h-11" onClick={handleUpdateSettings} disabled={isUpdatingSettings}>
+                  {isUpdatingSettings ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
                   Bilgileri Güncelle
                 </Button>
               </CardContent>
