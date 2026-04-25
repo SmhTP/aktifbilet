@@ -17,20 +17,29 @@ export default function ProviderLogin() {
   const [password, setPassword] = useState("")
   const [rememberMe, setRememberMe] = useState(true)
   
-  const [loading, setLoading] = useState(true) // Sayfa ilk açılış yüklemesi
-  const [loginLoading, setLoginLoading] = useState(false) // Butona basılma yüklemesi
+  const [loading, setLoading] = useState(true) 
+  const [loginLoading, setLoginLoading] = useState(false) 
   const [error, setError] = useState<string | null>(null)
 
-  // AKILLI KONTROL: Sayfa açılır açılmaz oturum var mı diye bakıyoruz
   useEffect(() => {
     async function checkExistingSession() {
       const { data: { session } } = await supabase.auth.getSession()
       
       if (session) {
-        // Eğer zaten giriş yapmışsa, formu hiç göstermeden direkt Panele fırlat!
-        router.push("/firma/panel")
+        // İÇERİDEKİ KİŞİ FİRMA MI KONTROLÜ
+        const { data: providerData } = await supabase
+          .from("providers")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .single()
+
+        if (providerData) {
+          window.location.replace("/firma/panel") // Firmaysa panele yolla
+        } else {
+          // Firma değilse (müşteriyse) burayı görmesine izin verme
+          window.location.replace("/") 
+        }
       } else {
-        // Giriş yapmamışsa formu göster
         setLoading(false)
       }
     }
@@ -42,23 +51,37 @@ export default function ProviderLogin() {
     setLoginLoading(true)
     setError(null)
 
-    // Supabase ile giriş yap
-    const { data, error } = await supabase.auth.signInWithPassword({
+    // 1. Supabase ile normal giriş yap
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    if (error) {
+    if (authError) {
       setError("E-posta veya şifre hatalı. Lütfen tekrar deneyin.")
       setLoginLoading(false)
       return
     }
 
-    // Başarılı girişten sonra panele yönlendir
-    router.push("/firma/panel")
+    // 2. KESİN GÜVENLİK KONTROLÜ: Giren kişi 'providers' (firma) tablosunda var mı?
+    const { data: providerData } = await supabase
+      .from("providers")
+      .select("id")
+      .eq("user_id", authData.user.id)
+      .single()
+
+    if (!providerData) {
+      // Eğer firma değilse (yani müşteriyse), hemen çıkış yaptır ve hesaptan at!
+      await supabase.auth.signOut()
+      setError("Bu hesap bir İş Ortağı hesabı değildir. Lütfen bireysel müşteri girişini kullanın.")
+      setLoginLoading(false)
+      return
+    }
+
+    // Her şey tamamsa panele temiz bir şekilde yönlendir
+    window.location.replace("/firma/panel")
   }
 
-  // Oturum kontrolü yapılırken beyaz ekran yerine şık bir yükleme simgesi
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-secondary/20">
@@ -92,7 +115,7 @@ export default function ProviderLogin() {
           <form onSubmit={handleLogin} className="space-y-5">
             
             {error && (
-              <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-lg text-center border border-destructive/20">
+              <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-lg text-center border border-destructive/20 font-medium">
                 {error}
               </div>
             )}
@@ -100,13 +123,8 @@ export default function ProviderLogin() {
             <div className="space-y-2">
               <Label htmlFor="email">E-posta Adresi</Label>
               <Input 
-                id="email" 
-                type="email" 
-                placeholder="firma@aktifbilet.com" 
-                required 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-12"
+                id="email" type="email" placeholder="firma@aktifbilet.com" required 
+                value={email} onChange={(e) => setEmail(e.target.value)} className="h-12"
               />
             </div>
             
@@ -118,20 +136,14 @@ export default function ProviderLogin() {
                 </Link>
               </div>
               <Input 
-                id="password" 
-                type="password" 
-                required 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="h-12"
+                id="password" type="password" required 
+                value={password} onChange={(e) => setPassword(e.target.value)} className="h-12"
               />
             </div>
 
-            {/* BENİ HATIRLA SEÇENEĞİ */}
             <div className="flex items-center gap-2 pt-2">
               <Checkbox 
-                id="remember" 
-                checked={rememberMe}
+                id="remember" checked={rememberMe}
                 onCheckedChange={(checked) => setRememberMe(checked as boolean)}
               />
               <Label htmlFor="remember" className="text-sm cursor-pointer text-muted-foreground font-normal">
@@ -152,7 +164,6 @@ export default function ProviderLogin() {
           Henüz iş ortağımız değil misiniz? <Link href="/iletisim" className="text-primary font-medium hover:underline">Bizimle iletişime geçin.</Link>
         </p>
         
-        {/* YENİ EKLENEN: Müşteri Girişine Dönüş Butonu */}
         <Button asChild variant="ghost" className="text-muted-foreground hover:text-foreground">
           <Link href="/kullanici/giris" className="flex items-center gap-2">
             <User className="h-4 w-4" />

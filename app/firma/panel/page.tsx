@@ -28,7 +28,7 @@ export default function ProviderDashboard() {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
-        window.location.href = "/firma/giris"
+        window.location.replace("/firma/giris")
         return
       }
 
@@ -56,8 +56,7 @@ export default function ProviderDashboard() {
           }
         }
       } else {
-        // Eğer giriş yapan kişi firma değilse (müşteriyse) onu dışarı at
-        window.location.href = "/"
+        window.location.replace("/")
       }
       
       setLoading(false)
@@ -68,7 +67,7 @@ export default function ProviderDashboard() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    window.location.href = "/firma/giris"
+    window.location.replace("/firma/giris")
   }
 
   const handleDelete = async (id: string) => {
@@ -98,7 +97,6 @@ export default function ProviderDashboard() {
 
   return (
     <div className="min-h-screen bg-secondary/20 flex flex-col md:flex-row">
-      {/* SADECE BİLGİSAYARDA GÖRÜNEN YAN MENÜ */}
       <aside className="w-64 bg-card border-r border-border hidden md:flex flex-col h-screen sticky top-0">
         <div className="p-6 border-b border-border">
           <div className="flex items-center gap-2">

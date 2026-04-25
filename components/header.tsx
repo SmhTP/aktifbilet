@@ -14,7 +14,7 @@ import {
 import { Search, Menu, X, User, MapPin, Calendar, ChevronDown, LogOut } from "lucide-react"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { useI18n } from "@/lib/i18n"
-import { supabase } from "@/lib/supabase" // SUPABASE EKLENDİ
+import { supabase } from "@/lib/supabase" 
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -22,10 +22,8 @@ export function Header() {
   const pathname = usePathname()
   const router = useRouter()
 
-  // YENİ: Kullanıcı Oturumunu Tutacak Hafıza
   const [user, setUser] = useState<any>(null)
 
-  // YENİ: Sayfa açıldığında ve oturum değiştiğinde kullanıcıyı kontrol et
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user)
@@ -38,10 +36,11 @@ export function Header() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // YENİ: Çıkış Yapma Fonksiyonu
+  // İŞTE KESİN ÇÖZÜM: Tam sayfa sıfırlaması ile çıkış yapma
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push("/")
+    // Sayfayı zorla yenileyerek Next.js önbelleğini temizliyoruz
+    window.location.replace("/")
   }
 
   if (pathname?.startsWith('/firma')) {
@@ -103,13 +102,11 @@ export function Header() {
               <span className="sr-only">{t("nav.search")}</span>
             </Button>
             
-            {/* YENİ: DİNAMİK KULLANICI MENÜSÜ */}
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="flex items-center gap-2 border-primary/20 hover:bg-primary/10">
                     <User className="h-4 w-4 text-primary" />
-                    {/* Kayıt olurken ismini almıştık, onu ekrana basıyoruz */}
                     <span className="text-sm font-medium max-w-[100px] truncate">
                       {user.user_metadata?.full_name || "Hesabım"}
                     </span>
@@ -189,7 +186,6 @@ export function Header() {
               </Link>
               
               <div className="flex flex-col gap-2 pt-4 border-t border-border">
-                {/* MOBİL İÇİN DİNAMİK MENÜ */}
                 {user ? (
                   <>
                     <Link href="/profil" className="text-sm text-muted-foreground" onClick={() => setMobileMenuOpen(false)}>Profilim</Link>
