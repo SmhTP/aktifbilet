@@ -61,17 +61,15 @@ export default function ProviderDashboard() {
           // Bu yüzden bu firmanın sahip olduğu aktivite ID'lerine denk gelen biletleri çekiyoruz.
           if (activityData.length > 0) {
             const activityIds = activityData.map(a => a.id)
-            const { data: bookingData } = await supabase
-              .from("bookings")
-              .select(`
-                *,
-                activities(name),
-                auth:user_id(email)
-              `)
-              .in("activity_id", activityIds)
-              .order("booking_date", { ascending: false }) // En yeniler en üstte
-            
-            if (bookingData) setBookings(bookingData)
+            const { data: bookingData, error: bookingError } = await supabase
+          .from("bookings")
+          .select(`*, activities(name)`) // auth tablosu kaldırıldı!
+          .in("activity_id", activityIds)
+          .order("booking_date", { ascending: false })
+
+      if (bookingError) {
+      console.error("Rezervasyonlar çekilemedi:", bookingError.message)
+}
           }
         }
       }
@@ -337,7 +335,7 @@ export default function ProviderDashboard() {
                                 ? booking.activities.name 
                                 : booking.activities?.name?.tr || "Aktivite"}
                             </td>
-                            <td className="px-4 py-3 text-muted-foreground">{booking.auth?.email || "Bilinmiyor"}</td>
+                            <td className="px-4 py-3 text-muted-foreground">Kayıtlı Müşteri</td>
                             <td className="px-4 py-3 text-center font-bold">{booking.guest_count}</td>
                             <td className="px-4 py-3 text-right font-bold text-primary">{booking.total_price} TL</td>
                             <td className="px-4 py-3 text-center">

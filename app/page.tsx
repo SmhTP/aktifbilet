@@ -41,7 +41,6 @@ export default function HomePage() {
   const [activities, setActivities] = useState<any[]>([])
   const [providers, setProviders] = useState<any[]>([])
   
-  // YENİ EKLENDİ: Kullanıcı State'i
   const [user, setUser] = useState<any>(null) 
 
   useEffect(() => {
@@ -108,7 +107,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* AKILLI BUTON: Kullanıcı giriş yapmışsa Profilime Git yazar */}
           <div className="mt-8 flex justify-center max-w-2xl mx-auto">
             {user ? (
               <Button asChild variant="outline" className="h-12 bg-background/20 hover:bg-background/40 border-white/30 text-white backdrop-blur-sm transition-all px-8">
@@ -259,9 +257,13 @@ export default function HomePage() {
           <div className="flex items-center gap-4 text-sm">
             <Link href="/hakkimizda" className="text-muted-foreground hover:text-primary">Hakkımızda</Link>
             <Link href="/iletisim" className="text-muted-foreground hover:text-primary">İletişim</Link>
-            <Link href="/firma/giris" className="text-primary font-medium hover:underline border-l border-border pl-4">
-              İş Ortaklarımız
-            </Link>
+            
+            {/* İŞTE DÜZELTİLEN YER: Sadece user yoksa gösterilir */}
+            {!user && (
+              <Link href="/firma/giris" className="text-primary font-medium hover:underline border-l border-border pl-4">
+                İş Ortaklarımız
+              </Link>
+            )}
           </div>
         </div>
       </footer>
