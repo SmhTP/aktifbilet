@@ -1,86 +1,135 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { notFound } from "next/navigation"
+import { useRouter } from "next/navigation"
 import {
-  Calendar,
-  Clock,
-  Users,
-  CreditCard,
-  Check,
-  ChevronRight,
-  Minus,
-  Plus,
-  BadgeCheck,
-  Star,
+  Calendar, Clock, Users, CreditCard, Check, ChevronRight, Minus, Plus, BadgeCheck, Star, Loader2, MapPin
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
-import { getActivityBySlug, getProviderBySlug, providers } from "@/lib/data"
+import { supabase } from "@/lib/supabase"
 import { useI18n } from "@/lib/i18n"
 
 interface PageProps {
   params: Promise<{ slug: string }>
 }
 
+// ÇÖKME KORUMASI: JSON okuyucu
+const getText = (obj: any, locale: string, fallback = "") => {
+  if (!obj) return fallback;
+  if (typeof obj === 'string') return obj;
+  return obj[locale] || obj['tr'] || fallback;
+}
+
 export default function BookingPage({ params }: PageProps) {
   const { t, locale } = useI18n()
-  const { slug } = use(params)
-  const searchParams = useSearchParams()
-  const providerSlug = searchParams.get("firma")
-  
-  // TypeScript için locale tipi
   const currentLocale = locale as "tr" | "en"
+  const router = useRouter()
+  const { slug } = use(params)
 
-  const activity = getActivityBySlug(slug)
-  const provider = providerSlug ? getProviderBySlug(providerSlug) : providers[0]
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  
+  const [user, setUser] = useState<any>(null)
+  const [activity, setActivity] = useState<any>(null)
+  const [provider, setProvider] = useState<any>(null)
 
-  if (!activity) {
-    notFound()
-  }
-
-  const providerActivity = provider?.activities.find(
-    (pa) => pa.activityId === activity.id
-  )
-
+  // Rezervasyon Form State'leri
   const [step, setStep] = useState(1)
   const [selectedDate, setSelectedDate] = useState<string>("")
-  const [participants, setParticipants] = useState(
-    providerActivity?.minParticipants || 1
-  )
+  const [selectedTime, setSelectedTime] = useState<string>("10:00") // Saat seçimi eklendi
+  const [participants, setParticipants] = useState(1)
+  
+  // İletişim Bilgileri (Adım 2)
   const [contactInfo, setContactInfo] = useState({
     name: "",
     email: "",
     phone: "",
   })
 
-  const totalPrice = (providerActivity?.price || 0) * participants
+  useEffect(() => {
+    async function fetchData() {
+      // 1. Kullanıcı Kontrolü
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push("/kullanici/giris")
+        return
+      }
+      setUser(user)
+      setContactInfo({
+        name: user.user_metadata?.full_name || "",
+        email: user.email || "",
+        phone: user.user_metadata?.phone || "",
+      })
 
-  // Dinamik aktivite adı
-  const activityName = activity.name[currentLocale]
+      // 2. Aktivite ve Firma Bilgisini Çek
+      const { data: actData } = await supabase
+        .from("activities")
+        .select("*, providers(*)")
+        .eq("slug", slug)
+        .single()
 
-  const handleSubmit = () => {
-    setStep(4)
-  }
+      if (actData) {
+        setActivity(actData)
+        setProvider(actData.providers)
+      }
+      setLoading(false)
+    }
+    fetchData()
+  }, [slug, router])
 
-  if (!provider || !providerActivity) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-lg text-muted-foreground">{t("booking.noProviderFound")}</p>
-          <Button asChild className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Link href={`/aktiviteler/${slug}`}>{t("booking.returnToActivity")}</Link>
-          </Button>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="animate-spin h-10 w-10 text-primary" />
       </div>
     )
+  }
+
+  if (!activity) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-center">
+        <h2 className="text-2xl font-bold mb-4">Aktivite Bulunamadı</h2>
+        <Button asChild><Link href="/aktiviteler">Aktivitelere Dön</Link></Button>
+      </div>
+    )
+  }
+
+  const activityName = getText(activity.name, currentLocale, "İsimsiz Aktivite")
+  const location = getText(activity.location, currentLocale, "Konum Belirtilmemiş")
+  const duration = typeof activity.duration === 'string' ? activity.duration : getText(activity.duration, currentLocale, "Belirtilmemiş")
+  
+  const totalPrice = (activity.price || 0) * participants
+  const todayDate = new Date().toISOString().split('T')[0]
+
+  // GERÇEK REZERVASYON İŞLEMİ (Adım 3'ten 4'e geçerken)
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    
+    const { error } = await supabase
+      .from("bookings")
+      .insert({
+        user_id: user.id,
+        activity_id: activity.id,
+        booking_date: selectedDate,
+        booking_time: selectedTime,
+        guest_count: participants,
+        total_price: totalPrice,
+        status: "onaylandi" 
+      })
+
+    if (error) {
+      alert("Rezervasyon sırasında hata oluştu: " + error.message)
+      setSubmitting(false)
+    } else {
+      setStep(4) // İşlem başarılıysa son ekrana (Onay ekranına) geç
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -92,40 +141,37 @@ export default function BookingPage({ params }: PageProps) {
             <ChevronRight className="h-4 w-4" />
             <Link href="/aktiviteler" className="hover:text-foreground transition-colors">{t("booking.breadcrumbActivities")}</Link>
             <ChevronRight className="h-4 w-4" />
-            <Link href={`/aktiviteler/${slug}`} className="hover:text-foreground transition-colors">{activityName}</Link>
+            <Link href={`/aktiviteler/${slug}`} className="hover:text-foreground transition-colors line-clamp-1 max-w-[200px]">{activityName}</Link>
             <ChevronRight className="h-4 w-4" />
             <span className="text-foreground">{t("booking.header")}</span>
           </nav>
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* İLERLEME ÇUBUĞU */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between max-w-3xl mx-auto">
             {[
               { num: 1, label: t("booking.step1Label") },
               { num: 2, label: t("booking.step2Label") },
               { num: 3, label: t("booking.step3Label") },
               { num: 4, label: t("booking.step4Label") },
             ].map((s, index) => (
-              <div key={s.num} className="flex items-center">
+              <div key={s.num} className="flex items-center w-full">
                 <div className="flex flex-col items-center">
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                      step >= s.num
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary text-muted-foreground"
-                    }`}
-                  >
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+                      step >= s.num ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"
+                    }`}>
                     {step > s.num ? <Check className="h-5 w-5" /> : s.num}
                   </div>
-                  <span className="mt-2 text-xs text-muted-foreground hidden sm:block">
+                  <span className="mt-2 text-xs font-medium text-muted-foreground hidden sm:block whitespace-nowrap">
                     {s.label}
                   </span>
                 </div>
                 {index < 3 && (
-                  <div
-                    className={`h-1 w-16 sm:w-24 mx-2 ${
+                  <div className={`h-1 flex-1 mx-2 sm:mx-4 rounded-full transition-colors ${
                       step > s.num ? "bg-primary" : "bg-secondary"
                     }`}
                   />
@@ -137,180 +183,116 @@ export default function BookingPage({ params }: PageProps) {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
+            
+            {/* ADIM 1: TARİH VE KİŞİ SAYISI */}
             {step === 1 && (
-              <Card>
+              <Card className="border-border shadow-sm">
                 <CardHeader>
                   <CardTitle>{t("booking.selectDateParticipants")}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-3">
-                    <Label className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      {t("booking.selectDateLabel")}
-                    </Label>
-                    <RadioGroup
-                      value={selectedDate}
-                      onValueChange={setSelectedDate}
-                      className="grid grid-cols-2 sm:grid-cols-3 gap-3"
-                    >
-                      {providerActivity.availableDates.map((date) => (
-                        <div key={date}>
-                          <RadioGroupItem
-                            value={date}
-                            id={date}
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor={date}
-                            className="flex flex-col items-center justify-center rounded-lg border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
-                          >
-                            <span className="text-sm font-medium">
-                              {new Date(date).toLocaleDateString(currentLocale === "en" ? "en-US" : "tr-TR", {
-                                day: "numeric",
-                                month: "short",
-                              })}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(date).toLocaleDateString(currentLocale === "en" ? "en-US" : "tr-TR", {
-                                weekday: "short",
-                              })}
-                            </span>
-                          </Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
+                <CardContent className="space-y-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <Label className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Tarih Seçin</Label>
+                      <Input 
+                        type="date" required min={todayDate}
+                        value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}
+                        className="h-12"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <Label className="flex items-center gap-2"><Clock className="h-4 w-4" /> Saat Seçin</Label>
+                      <Input 
+                        type="time" required
+                        value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)}
+                        className="h-12"
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-3 pt-4 border-t border-border">
                     <Label className="flex items-center gap-2">
                       <Users className="h-4 w-4" />
                       {t("booking.participantCount")}
                     </Label>
                     <div className="flex items-center gap-4">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() =>
-                          setParticipants(Math.max(providerActivity.minParticipants, participants - 1))
-                        }
-                        disabled={participants <= providerActivity.minParticipants}
-                      >
+                      <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setParticipants(Math.max(1, participants - 1))} disabled={participants <= 1}>
                         <Minus className="h-4 w-4" />
                       </Button>
-                      <span className="text-2xl font-bold text-foreground w-12 text-center">
-                        {participants}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() =>
-                          setParticipants(Math.min(providerActivity.maxParticipants, participants + 1))
-                        }
-                        disabled={participants >= providerActivity.maxParticipants}
-                      >
+                      <span className="text-3xl font-bold text-foreground w-16 text-center">{participants}</span>
+                      <Button variant="outline" size="icon" className="h-10 w-10" onClick={() => setParticipants(Math.min(20, participants + 1))} disabled={participants >= 20}>
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {t("booking.min")}: {providerActivity.minParticipants}, {t("booking.max")}: {providerActivity.maxParticipants} {t("common.person")}
-                    </p>
                   </div>
 
-                  <Button
-                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                    size="lg"
-                    disabled={!selectedDate}
-                    onClick={() => setStep(2)}
-                  >
-                    {t("booking.continue")}
+                  <Button className="w-full h-12 text-lg" disabled={!selectedDate || !selectedTime} onClick={() => setStep(2)}>
+                    {t("booking.continue")} <ChevronRight className="ml-2 h-5 w-5" />
                   </Button>
                 </CardContent>
               </Card>
             )}
 
+            {/* ADIM 2: İLETİŞİM BİLGİLERİ */}
             {step === 2 && (
-              <Card>
+              <Card className="border-border shadow-sm">
                 <CardHeader>
                   <CardTitle>{t("booking.contactInfo")}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="name">{t("booking.fullName")}</Label>
-                    <Input
-                      id="name"
-                      value={contactInfo.name}
-                      onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
-                      placeholder={t("booking.namePlaceholder")}
-                    />
+                    <Input id="name" value={contactInfo.name} onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })} className="h-12" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="email">{t("profile.email")}</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={contactInfo.email}
-                      onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                      placeholder={t("booking.emailPlaceholder")}
-                    />
+                    <Input id="email" type="email" value={contactInfo.email} onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })} className="h-12" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">{t("profile.phone")}</Label>
-                    <Input
-                      id="phone"
-                      value={contactInfo.phone}
-                      onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                      placeholder={t("booking.phonePlaceholder")}
-                    />
+                    <Input id="phone" value={contactInfo.phone} onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })} className="h-12" />
                   </div>
-                  <div className="flex gap-3 pt-4">
-                    <Button variant="outline" onClick={() => setStep(1)}>
-                      {t("booking.back")}
-                    </Button>
-                    <Button
-                      className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-                      disabled={!contactInfo.name || !contactInfo.email || !contactInfo.phone}
-                      onClick={() => setStep(3)}
-                    >
-                      {t("booking.continue")}
+                  
+                  <div className="flex gap-3 pt-6 border-t border-border">
+                    <Button variant="outline" className="h-12 px-6" onClick={() => setStep(1)}>{t("booking.back")}</Button>
+                    <Button className="flex-1 h-12 text-lg" disabled={!contactInfo.name || !contactInfo.email} onClick={() => setStep(3)}>
+                      {t("booking.continue")} <ChevronRight className="ml-2 h-5 w-5" />
                     </Button>
                   </div>
                 </CardContent>
               </Card>
             )}
 
+            {/* ADIM 3: ÖDEME (Supabase Kaydı Burada Olur) */}
             {step === 3 && (
-              <Card>
+              <Card className="border-border shadow-sm">
                 <CardHeader>
                   <CardTitle>{t("booking.paymentInfo")}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cardNumber">{t("booking.cardNumber")}</Label>
-                    <Input id="cardNumber" placeholder={t("booking.cardNumberPlaceholder")} />
+                <CardContent className="space-y-5">
+                  <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 mb-6">
+                    <p className="text-sm text-foreground/80">Test aşamasında olduğumuz için ödeme adımını atlayarak güvenli rezervasyon yapabilirsiniz.</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+
+                  <div className="space-y-2 opacity-50 pointer-events-none">
+                    <Label>{t("booking.cardNumber")}</Label>
+                    <Input placeholder="**** **** **** ****" className="h-12" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 opacity-50 pointer-events-none">
                     <div className="space-y-2">
-                      <Label htmlFor="expiry">{t("booking.expiry")}</Label>
-                      <Input id="expiry" placeholder={t("booking.expiryPlaceholder")} />
+                      <Label>{t("booking.expiry")}</Label>
+                      <Input placeholder="AA/YY" className="h-12" />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="cvv">{t("booking.cvv")}</Label>
-                      <Input id="cvv" placeholder={t("booking.cvvPlaceholder")} />
+                      <Label>{t("booking.cvv")}</Label>
+                      <Input placeholder="***" className="h-12" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cardName">{t("booking.cardName")}</Label>
-                    <Input id="cardName" placeholder={t("booking.cardNamePlaceholder")} />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <Button variant="outline" onClick={() => setStep(2)}>
-                      {t("booking.back")}
-                    </Button>
-                    <Button
-                      className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
-                      onClick={handleSubmit}
-                    >
-                      <CreditCard className="mr-2 h-4 w-4" />
+                  
+                  <div className="flex gap-3 pt-6 border-t border-border">
+                    <Button variant="outline" className="h-12 px-6" onClick={() => setStep(2)} disabled={submitting}>{t("booking.back")}</Button>
+                    <Button className="flex-1 h-12 text-lg font-bold" onClick={handleSubmit} disabled={submitting}>
+                      {submitting ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <CreditCard className="mr-2 h-5 w-5" />}
                       {totalPrice} TL {t("booking.pay")}
                     </Button>
                   </div>
@@ -318,48 +300,49 @@ export default function BookingPage({ params }: PageProps) {
               </Card>
             )}
 
+            {/* ADIM 4: ONAY EKRANI */}
             {step === 4 && (
-              <Card className="border-primary">
-                <CardContent className="pt-8 text-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary mx-auto">
-                    <Check className="h-8 w-8 text-primary-foreground" />
+              <Card className="border-primary shadow-lg overflow-hidden relative">
+                <div className="absolute top-0 left-0 w-full h-2 bg-primary"></div>
+                <CardContent className="pt-12 pb-8 text-center px-6">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-500/10 mx-auto mb-6">
+                    <Check className="h-10 w-10 text-green-500" />
                   </div>
-                  <h2 className="mt-6 text-2xl font-bold text-foreground">{t("booking.confirmed")}</h2>
+                  <h2 className="text-3xl font-bold text-foreground">{t("booking.confirmed")}</h2>
                   <p className="mt-2 text-muted-foreground">{t("booking.confirmationEmail")}</p>
-                  <div className="mt-8 space-y-4 text-left bg-secondary/50 rounded-lg p-6">
-                    <div className="flex justify-between">
+                  
+                  <div className="mt-8 space-y-4 text-left bg-secondary/30 border border-border rounded-xl p-6 max-w-md mx-auto">
+                    <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">{t("booking.bookingNo")}</span>
-                      <span className="font-mono font-medium text-foreground">#RZV-{Date.now().toString().slice(-6)}</span>
+                      <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-1 rounded">#RZV-{Date.now().toString().slice(-6)}</span>
                     </div>
+                    <Separator className="my-2" />
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">{t("booking.activity")}</span>
-                      <span className="font-medium text-foreground">{activityName}</span>
+                      <span className="font-medium text-foreground text-right max-w-[200px] truncate">{activityName}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">{t("booking.date")}</span>
                       <span className="font-medium text-foreground">
-                        {new Date(selectedDate).toLocaleDateString(currentLocale === "en" ? "en-US" : "tr-TR", {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
+                        {new Date(selectedDate).toLocaleDateString("tr-TR")}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">{t("booking.participant")}</span>
                       <span className="font-medium text-foreground">{participants} {t("common.person")}</span>
                     </div>
-                    <Separator />
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{t("booking.total")}</span>
-                      <span className="text-lg font-bold text-primary">{totalPrice} TL</span>
+                    <Separator className="my-2" />
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="font-bold text-foreground">{t("booking.total")}</span>
+                      <span className="text-xl font-bold text-primary">{totalPrice} TL</span>
                     </div>
                   </div>
-                  <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-                    <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                  
+                  <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+                    <Button asChild className="h-12 px-8 text-base">
                       <Link href="/etkinliklerim">{t("booking.goToMyEvents")}</Link>
                     </Button>
-                    <Button asChild variant="outline">
+                    <Button asChild variant="outline" className="h-12 px-8 text-base">
                       <Link href="/aktiviteler">{t("booking.browseOther")}</Link>
                     </Button>
                   </div>
@@ -368,100 +351,82 @@ export default function BookingPage({ params }: PageProps) {
             )}
           </div>
 
+          {/* SAĞ PANEL: Özet Kartı */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-24">
-              <CardHeader>
+            <Card className="sticky top-24 border-border shadow-sm">
+              <CardHeader className="bg-secondary/30 border-b border-border">
                 <CardTitle>{t("booking.summaryTitle")}</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-3">
-                  <div className="relative h-20 w-20 shrink-0 rounded-lg overflow-hidden">
-                    <Image
-                      src={activity.image}
-                      alt={activityName}
-                      fill
-                      className="object-cover"
-                    />
+              <CardContent className="p-6 space-y-6">
+                <div className="flex gap-4">
+                  <div className="relative h-24 w-24 shrink-0 rounded-xl overflow-hidden shadow-sm">
+                    <Image src={activity.image || "/placeholder.jpg"} alt={activityName} fill className="object-cover" />
                   </div>
-                  <div>
-                    <h3 className="font-medium text-foreground">{activityName}</h3>
-                    {/* Dinamik lokasyon alanı */}
-                    <p className="text-sm text-muted-foreground">{activity.location[currentLocale]}</p>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="flex items-center gap-3">
-                  <div className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden">
-                    <Image
-                      src={provider.logo}
-                      alt={provider.name}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <span className="font-medium text-foreground">{provider.name}</span>
-                      {provider.verified && <BadgeCheck className="h-4 w-4 text-primary" />}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Star className="h-3 w-3 fill-accent text-accent" />
-                      <span className="text-sm text-muted-foreground">{provider.rating}</span>
+                  <div className="flex flex-col justify-center">
+                    <h3 className="font-bold text-lg text-foreground line-clamp-2 leading-tight">{activityName}</h3>
+                    <div className="flex items-center gap-1 mt-2 text-muted-foreground text-sm">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      <span className="line-clamp-1">{location}</span>
                     </div>
                   </div>
                 </div>
 
+                {provider && (
+                  <>
+                    <Separator />
+                    <div className="flex items-center gap-3">
+                      <div className="relative h-12 w-12 shrink-0 rounded-full bg-secondary border border-border flex items-center justify-center font-bold text-primary">
+                        {provider.name[0]}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium text-foreground">{provider.name}</span>
+                          <BadgeCheck className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                          <span className="text-sm font-medium">{provider.rating || 5.0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <Separator />
 
-                <div className="space-y-2 text-sm">
+                <div className="space-y-3 text-sm">
                   {selectedDate && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{t("booking.date")}</span>
-                      <span className="font-medium text-foreground">
-                        {new Date(selectedDate).toLocaleDateString(currentLocale === "en" ? "en-US" : "tr-TR", {
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground flex items-center gap-2"><Calendar className="h-4 w-4" /> Tarih</span>
+                      <span className="font-medium text-foreground bg-secondary px-2 py-1 rounded">{new Date(selectedDate).toLocaleDateString("tr-TR")}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t("common.duration")}</span>
-                    <span className="font-medium text-foreground">{providerActivity.duration}</span>
-                  </div>
-                  <div className="flex justify-between">
+                  {selectedTime && (
+                     <div className="flex justify-between items-center">
+                     <span className="text-muted-foreground flex items-center gap-2"><Clock className="h-4 w-4" /> Saat</span>
+                     <span className="font-medium text-foreground">{selectedTime}</span>
+                   </div>
+                  )}
+                  <div className="flex justify-between items-center pt-2">
                     <span className="text-muted-foreground">{t("booking.participant")}</span>
                     <span className="font-medium text-foreground">{participants} {t("common.person")}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">{t("common.perPerson")}</span>
-                    <span className="font-medium text-foreground">{providerActivity.price} TL</span>
+                    <span className="font-medium text-foreground">{activity.price} TL</span>
                   </div>
                 </div>
 
-                <Separator />
-
-                <div className="flex justify-between items-center">
-                  <span className="font-medium text-foreground">{t("booking.total")}</span>
-                  <span className="text-2xl font-bold text-primary">{totalPrice} TL</span>
-                </div>
-
-                <div className="pt-2">
-                  <p className="text-sm font-medium text-foreground mb-2">{t("booking.includedItems")}</p>
-                  <ul className="space-y-1">
-                    {providerActivity.includes.map((item, index) => (
-                      <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Check className="h-4 w-4 text-primary" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
+                <div className="bg-secondary/50 rounded-xl p-4 mt-6">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-foreground text-lg">{t("booking.total")}</span>
+                    <span className="text-2xl font-black text-primary">{totalPrice} TL</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
+          
         </div>
       </div>
     </div>
